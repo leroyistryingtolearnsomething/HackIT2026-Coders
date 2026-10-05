@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kampung Watch — Spot scams together</title>
+  <meta name="description" content="A community-centric platform to identify, discuss and respond to scams in real time: ask a volunteer, see scams near you, discuss with neighbours and learn.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="#/home" class="brand" aria-label="Kampung Watch home">
+        <span class="brand-mark" aria-hidden="true">🛡️</span>
+        <span class="brand-text">Kampung<span>Watch</span></span>
+      </a>
+
+      <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="siteNav">
+        <span aria-hidden="true">☰</span> <span class="nav-toggle-text">Menu</span>
+      </button>
+
+      <nav id="siteNav" class="site-nav" aria-label="Main">
+        <a href="#/home" data-route="home">Home</a>
+        <a href="#/ask" data-route="ask">Ask a Neighbour</a>
+        <a href="#/radar" data-route="radar">Scam Radar</a>
+        <a href="#/community" data-route="community">Community</a>
+        <a href="#/learn" data-route="learn">Learn</a>
+      </nav>
+
+      <div class="header-tools">
+        <button id="textSizeBtn" class="tool-btn" aria-pressed="false" title="Make text bigger">
+          <span aria-hidden="true">A<sup>+</sup></span><span class="sr-only">Larger text</span>
+        </button>
+        <label class="switch" title="Switch to the volunteer view to answer cases and verify reports">
+          <input type="checkbox" id="volunteerToggle" aria-label="Volunteer mode">
+          <span class="switch-track" aria-hidden="true"></span>
+          <span class="switch-label">Volunteer</span>
+        </label>
+      </div>
+    </div>
+    <div class="vol-strip vol-only">
+      <div class="container">🙋 <strong>Volunteer mode</strong> — you can answer cases, verify Scam Radar reports and mark verified answers.</div>
+    </div>
+  </header>
+
+  <div id="alertBanner" class="alert-banner" role="alert" hidden></div>
+
+  <main id="main" class="container" tabindex="-1"></main>
+
+  <a href="#/ask" class="fab" id="fab">🚩 Is this a scam?</a>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <p class="brand-text footer-brand">Kampung<span>Watch</span></p>
+        <p class="muted">Neighbours helping neighbours spot, discuss and stop scams.</p>
+      </div>
+      <div>
+        <h2 class="footer-h">Need help now?</h2>
+        <ul class="helpline-list" id="footerHelplines"></ul>
+      </div>
+      <div>
+        <h2 class="footer-h">About this prototype</h2>
+        <p class="muted small">Built for HackIT 2026. Demo data is stored only in your browser.</p>
+        <button class="btn btn-ghost btn-sm" id="resetDemo">Reset demo data</button>
+      </div>
+    </div>
+  </footer>
+
+  <div id="modal" class="modal" hidden></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
