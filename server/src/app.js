@@ -17,6 +17,7 @@ import assistantRouter from './routes/assistant.js';
 import circlesRouter from './routes/circles.js';
 import pausesRouter from './routes/pauses.js';
 import drillsRouter from './routes/drills.js';
+import pauseLinksRouter from './routes/pauseLinks.js';
 import { createPauseWatch } from './models/pauses.js';
 
 export function createApp(overrides = {}) {
@@ -60,6 +61,7 @@ export function createApp(overrides = {}) {
   api.use('/circles', circlesRouter(ctx));
   api.use('/pauses', pausesRouter(ctx));
   api.use('/drills', drillsRouter(ctx));
+  api.use('/pause-link', pauseLinksRouter(ctx));
   api.use((req, res, next) => next(new HttpError(404, 'No such API endpoint')));
   api.use((err, req, res, next) => {
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'That upload is too large.' });

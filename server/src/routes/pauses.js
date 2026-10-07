@@ -4,10 +4,9 @@ import { Router } from 'express';
 import { requireClient } from '../auth.js';
 import { transaction } from '../db.js';
 import { KW } from '../shared.js';
-import { text, oneOf, notFound, badRequest, forbidden, newId, nowIso } from '../http.js';
-import { circleOf, memberClients } from '../models/circles.js';
+import { text, oneOf, notFound, badRequest, forbidden, nowIso } from '../http.js';
 import {
-  getPauseRow, openPauseOf, pauseRole, serializePause, addPauseMessage, updatePause, claimPause, notifyPause
+  getPauseRow, openPauseOf, pauseRole, serializePause, addPauseMessage, updatePause, claimPause, notifyPause, pressPause
 } from '../models/pauses.js';
 
 const SIGN_IDS = KW.PAUSE_SIGNS.map(s => s.id);
@@ -83,29 +82,9 @@ export default function pausesRouter({ db, hub, pauseWatch }) {
 
   /* One tap. Pressing again while a Pause is open returns the same one. */
   r.post('/', (req, res) => {
-    const existing = openPauseOf(db, req.clientId);
-    if (existing) return res.json(serializePause(db, existing, req));
-
-    const details = readDetails(req.body || {});
-    const circle = circleOf(db, req.clientId);
-    const hasCircle = !!circle && memberClients(db, circle.id).length > 0;
-    const now = nowIso();
-    const id = newId('p');
-    transaction(db, () => {
-      db.prepare(`INSERT INTO pauses (id, client_id, circle_id, name, town, signs, caller, note, stage, created_at, escalated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, req.clientId, circle ? circle.id : null, circle ? circle.owner_name : 'A resident', circle ? circle.town : null,
-          JSON.stringify(details.signs || []), details.caller || null, details.note || '',
-          hasCircle ? 'circle' : 'volunteer', now, hasCircle ? null : now);
-      addPauseMessage(db, id, 'system', null, hasCircle
-        ? 'Your Circle has been alerted. Stay on this screen. Don’t pay, and don’t share any codes.'
-        : 'Volunteers near you have been alerted. Don’t pay, and don’t share any codes.');
-    });
-    const row = getPauseRow(db, id);
-    notifyPause(db, hub, row, 'new');
-    if (hasCircle) pauseWatch.schedule(row);
-    else pauseWatch.onVolunteerStage(id);
-    res.status(201).json(serializePause(db, row, req));
+    const details = openPauseOf(db, req.clientId) ? {} : readDetails(req.body || {});
+    const { row, created } = pressPause({ db, hub, pauseWatch }, req.clientId, details);
+    res.status(created ? 201 : 200).json(serializePause(db, row, req));
   });
 
   /* The resident adds what's happening: the warning signs and who the caller claims to be. */

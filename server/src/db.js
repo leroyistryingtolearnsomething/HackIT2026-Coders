@@ -171,6 +171,14 @@ CREATE TABLE IF NOT EXISTS drills (
 );
 CREATE INDEX IF NOT EXISTS idx_drills_target ON drills (target_client);
 
+-- Emergency links: a private link that can only press Pause for one resident
+-- (for an iPhone Back Tap or Siri shortcut). Only a hash of the token is stored.
+CREATE TABLE IF NOT EXISTS pause_links (
+  token_hash TEXT PRIMARY KEY,
+  client_id  TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS volunteer_sessions (
   token_hash TEXT PRIMARY KEY,
   name       TEXT NOT NULL,

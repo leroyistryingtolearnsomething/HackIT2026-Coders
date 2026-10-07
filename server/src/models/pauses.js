@@ -1,6 +1,7 @@
 /* Pause: a resident under pressure asks their Circle (then volunteers) to step in. */
-import { nowIso } from '../http.js';
-import { getCircle, memberClients, membership } from './circles.js';
+import { nowIso, newId } from '../http.js';
+import { transaction } from '../db.js';
+import { getCircle, memberClients, membership, circleOf } from './circles.js';
 
 export function getPauseRow(db, id) {
   return db.prepare('SELECT * FROM pauses WHERE id = ?').get(id);
@@ -56,6 +57,32 @@ export function updatePause(db, id, fields) {
   if (!keys.length) return;
   const values = keys.map(k => (JSON_COLUMNS.has(k) && fields[k] != null ? JSON.stringify(fields[k]) : fields[k]));
   db.prepare(`UPDATE pauses SET ${keys.map(k => k + ' = ?').join(', ')} WHERE id = ?`).run(...values, id);
+}
+
+/* Press Pause for a resident: alerts their Circle (or volunteers if they have no one yet).
+   A second press while one is open returns the open one. */
+export function pressPause({ db, hub, pauseWatch }, clientId, details = {}) {
+  const existing = openPauseOf(db, clientId);
+  if (existing) return { row: existing, created: false };
+  const circle = circleOf(db, clientId);
+  const hasCircle = !!circle && memberClients(db, circle.id).length > 0;
+  const now = nowIso();
+  const id = newId('p');
+  transaction(db, () => {
+    db.prepare(`INSERT INTO pauses (id, client_id, circle_id, name, town, signs, caller, note, stage, created_at, escalated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(id, clientId, circle ? circle.id : null, circle ? circle.owner_name : 'A resident', circle ? circle.town : null,
+        JSON.stringify(details.signs || []), details.caller || null, details.note || '',
+        hasCircle ? 'circle' : 'volunteer', now, hasCircle ? null : now);
+    addPauseMessage(db, id, 'system', null, hasCircle
+      ? 'Your Circle has been alerted. Stay on this screen. Don’t pay, and don’t share any codes.'
+      : 'Volunteers near you have been alerted. Don’t pay, and don’t share any codes.');
+  });
+  const row = getPauseRow(db, id);
+  notifyPause(db, hub, row, 'new');
+  if (hasCircle) pauseWatch.schedule(row);
+  else pauseWatch.onVolunteerStage(id);
+  return { row, created: true };
 }
 
 /* First person to step in becomes the responder; the escalation clock stops. */

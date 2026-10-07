@@ -190,3 +190,48 @@ test('leaving a Circle', async () => {
   const left = await call('DELETE', '/circles/members/' + memberId, { client: SON });
   assert.equal(left.data.guarding.length, 0);
 });
+
+test('emergency link: presses Pause for its owner from any browser, and nothing else', async () => {
+  // Mdm Tan sets up a Circle with a member again (the son left in the previous test).
+  const KID = 'resident-kid-0004';
+  const mine = await call('GET', '/circles/me');
+  await call('POST', '/circles/join', { client: KID, body: { code: mine.data.mine.inviteCode, name: 'Mei', relation: 'Daughter' } });
+
+  assert.equal((await call('GET', '/pause-link')).data.active, false);
+  const made = await call('POST', '/pause-link');
+  assert.equal(made.status, 201);
+  const { token } = made.data;
+  assert.match(token, /^[A-Za-z0-9_-]{30,}$/);
+  assert.equal((await call('GET', '/pause-link')).data.active, true);
+
+  // Safari (a different, unknown browser) opens the link.
+  const SAFARI = 'safari-unknown-0005';
+  const status = await call('POST', '/pause-link/status', { client: SAFARI, body: { token } });
+  assert.equal(status.data.name, 'Mdm Tan');
+  assert.deepEqual(status.data.people, ['Mei']);
+  assert.equal(status.data.pause, null);
+
+  const pressed = await call('POST', '/pause-link/press', { client: SAFARI, body: { token } });
+  assert.equal(pressed.status, 201);
+  assert.equal(pressed.data.alerted, 'circle');
+  assert.equal(pressed.data.pause.stage, 'circle');
+
+  // It's Mdm Tan's Pause: her Circle sees it, the browser that pressed it does not own it.
+  const theirs = await call('GET', '/circles/me', { client: KID });
+  assert.ok(theirs.data.guarding[0].openPause);
+  assert.equal((await call('GET', '/pauses', { client: SAFARI })).data.length, 0);
+  // Pressing again doesn't make a second Pause.
+  assert.equal((await call('POST', '/pause-link/press', { client: SAFARI, body: { token } })).status, 200);
+
+  // The responder shows up in the link's status.
+  await call('POST', `/pauses/${theirs.data.guarding[0].openPause.id}/respond`, { client: KID });
+  assert.equal((await call('POST', '/pause-link/status', { client: SAFARI, body: { token } })).data.pause.responder.name, 'Mei');
+  await call('POST', `/pauses/${theirs.data.guarding[0].openPause.id}/resolve`, { client: KID, body: { outcome: 'safe' } });
+
+  // A new link replaces the old one; bad and deleted links don't work.
+  const renewed = (await call('POST', '/pause-link')).data.token;
+  assert.equal((await call('POST', '/pause-link/press', { client: SAFARI, body: { token } })).status, 404);
+  assert.equal((await call('POST', '/pause-link/status', { client: SAFARI, body: { token: 'not a token' } })).status, 404);
+  assert.equal((await call('DELETE', '/pause-link')).status, 204);
+  assert.equal((await call('POST', '/pause-link/press', { client: SAFARI, body: { token: renewed } })).status, 404);
+});

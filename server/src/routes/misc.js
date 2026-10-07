@@ -68,5 +68,13 @@ export default function miscRouter({ db, hub, config, bot, assistant }) {
   /* Live updates (Server-Sent Events). */
   r.get('/events', requireClient, (req, res) => hub.connect(req, res));
 
+  /* The same updates by polling, for networks that hold the stream back.
+     Without ?after it just returns the latest event id to start from. */
+  r.get('/events/poll', requireClient, (req, res) => {
+    const after = Number(req.query.after);
+    if (!Number.isInteger(after) || after < 0) return res.json({ last: hub.lastId(), events: [] });
+    res.json(hub.since(after, { clientId: req.clientId, volunteer: req.volunteer }));
+  });
+
   return r;
 }
