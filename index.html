@@ -7,68 +7,67 @@
   <meta name="description" content="A community-centric platform to identify, discuss and respond to scams in real time: ask a volunteer, see scams near you, discuss with neighbours and learn.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="css/broadsheet.css">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
   <header class="site-header">
-    <div class="container header-inner">
-      <a href="#/home" class="brand" aria-label="Kampung Watch home">
-        <span class="brand-mark" aria-hidden="true">🛡️</span>
-        <span class="brand-text">Kampung<span>Watch</span></span>
+    <nav class="nav site-bar" aria-label="Main">
+      <a href="#/home" class="nav-brand">
+        <!-- Logo: a kampung house with a tick. Colours come from css/styles.css. -->
+        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <rect class="logo-bg" width="32" height="32" rx="4"/>
+          <path class="logo-line" d="M5 15.5 16 6.5l11 9"/>
+          <path class="logo-line" d="M8.5 13v12.5h15V13"/>
+          <path class="logo-tick" d="m12 19.5 3 3 5.5-6"/>
+        </svg>
+        <span>Kampung Watch</span>
       </a>
-
-      <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="siteNav">
-        <span aria-hidden="true">☰</span> <span class="nav-toggle-text">Menu</span>
-      </button>
-
-      <nav id="siteNav" class="site-nav" aria-label="Main">
-        <a href="#/home" data-route="home">Home</a>
-        <a href="#/ask" data-route="ask">Ask a Neighbour</a>
-        <a href="#/radar" data-route="radar">Scam Radar</a>
-        <a href="#/community" data-route="community">Community</a>
-        <a href="#/learn" data-route="learn">Learn</a>
-      </nav>
-
-      <div class="header-tools">
-        <button id="textSizeBtn" class="tool-btn" aria-pressed="false" title="Make text bigger">
-          <span aria-hidden="true">A<sup>+</sup></span><span class="sr-only">Larger text</span>
-        </button>
-        <label class="switch" title="Switch to the volunteer view to answer cases and verify reports">
-          <input type="checkbox" id="volunteerToggle" aria-label="Volunteer mode">
-          <span class="switch-track" aria-hidden="true"></span>
-          <span class="switch-label">Volunteer</span>
-        </label>
+      <button type="button" class="btn btn-secondary nav-toggle" id="navToggle" aria-expanded="false" aria-controls="siteNav" data-i18n="menu">Menu</button>
+      <div class="site-nav" id="siteNav">
+        <a href="#/pause" data-route="pause" class="nav-pause" data-i18n="navPause">Pause</a>
+        <a href="#/ask" data-route="ask" data-i18n="navCheck">Check a message</a>
+        <a href="#/radar" data-route="radar" data-i18n="navRadar">Scam Radar</a>
+        <a href="#/community" data-route="community" data-i18n="navCommunity">Community</a>
+        <a href="#/learn" data-route="learn" data-i18n="navLearn">Learn</a>
+        <a href="#/ai" data-route="ai" data-i18n="assistant">Ask AI</a>
+        <label class="sr-only" for="langSelect" data-i18n="langLabel">Language</label>
+        <select id="langSelect" class="input lang-select">
+          <option value="en" lang="en">English</option>
+          <option value="zh" lang="zh">华语</option>
+          <option value="ms" lang="ms">Bahasa Melayu</option>
+          <option value="ta" lang="ta">தமிழ்</option>
+        </select>
+        <button type="button" class="btn btn-ghost" data-text-size aria-pressed="false" data-i18n="textSize">Text size A+</button>
+        <button type="button" class="btn btn-ghost" id="volunteerBtn">Volunteer sign in</button>
       </div>
-    </div>
-    <div class="vol-strip vol-only">
-      <div class="container">🙋 <strong>Volunteer mode</strong> — you can answer cases, verify Scam Radar reports and mark verified answers.</div>
-    </div>
+    </nav>
+    <p class="vol-strip vol-only">Volunteer mode. <span id="volStripText"></span> You can answer cases, verify Scam Radar reports and give verdicts.</p>
   </header>
 
   <div id="alertBanner" class="alert-banner" role="alert" hidden></div>
 
-  <main id="main" class="container" tabindex="-1"></main>
+  <main id="main" tabindex="-1"></main>
 
-  <a href="#/ask" class="fab" id="fab">🚩 Is this a scam?</a>
+  <a href="#/ask" class="btn btn-primary fab" id="fab">Is this a scam?</a>
 
   <footer class="site-footer">
-    <div class="container footer-grid">
+    <div class="footer-grid">
       <div>
-        <p class="brand-text footer-brand">Kampung<span>Watch</span></p>
+        <p class="footer-brand">Kampung Watch</p>
         <p class="muted">Neighbours helping neighbours spot, discuss and stop scams.</p>
       </div>
       <div>
-        <h2 class="footer-h">Need help now?</h2>
+        <h2 class="kicker">Need help now?</h2>
         <ul class="helpline-list" id="footerHelplines"></ul>
       </div>
       <div>
-        <h2 class="footer-h">About this prototype</h2>
-        <p class="muted small">Built for HackIT 2026. Demo data is stored only in your browser.</p>
-        <button class="btn btn-ghost btn-sm" id="resetDemo">Reset demo data</button>
+        <h2 class="kicker">About this prototype</h2>
+        <p class="muted">Built for HackIT 2026. Reports, posts and cases are shared through the Kampung Watch server. Your course progress and alert settings stay in this browser.</p>
+        <button type="button" class="btn btn-ghost" id="resetLocal">Clear my browser data</button>
       </div>
     </div>
   </footer>

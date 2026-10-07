@@ -1,0 +1,21 @@
+{
+  "name": "kampung-watch-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend API for Kampung Watch: reports, community posts, volunteer cases and live updates",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env src/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env --watch src/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@google/genai": "^2.27.0",
+    "express": "^5.1.0"
+  }
+}

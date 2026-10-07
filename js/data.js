@@ -42,14 +42,14 @@ KW.SCAM_TYPES = [
   'Other'
 ];
 
-KW.CHANNELS = ['SMS', 'WhatsApp / Telegram', 'Phone call', 'Email', 'Social media', 'Website / ad', 'In person'];
+KW.CHANNELS = ['SMS', 'WhatsApp / Telegram', 'Phone call', 'Email', 'Social media', 'Website / ad', 'In person', 'Not sure'];
 
 KW.FLAIRS = [
-  { id: 'ask', label: 'Is this a scam?', icon: '❓' },
-  { id: 'alert', label: 'Scam alert', icon: '⚠️' },
-  { id: 'tips', label: 'Tips & advice', icon: '💡' },
-  { id: 'debate', label: 'Debate', icon: '🗣️' },
-  { id: 'story', label: 'My story', icon: '📖' }
+  { id: 'ask', label: 'Is this a scam?' },
+  { id: 'alert', label: 'Scam alert' },
+  { id: 'tips', label: 'Tips & advice' },
+  { id: 'debate', label: 'Debate' },
+  { id: 'story', label: 'My story' }
 ];
 
 KW.VOLUNTEERS = [
@@ -67,6 +67,69 @@ KW.HELPLINES = [
   { label: 'Police Hotline', number: '1800 255 0000', note: 'Share information on a scam' }
 ];
 
+/* Pause: the warning signs a resident can tap while someone is pressuring them. */
+KW.PAUSE_SIGNS = [
+  { id: 'pay', label: 'They want me to pay or transfer money' },
+  { id: 'secret', label: 'They told me not to tell anyone' },
+  { id: 'otp', label: 'They asked for an OTP, password or Singpass' },
+  { id: 'app', label: 'They want me to install an app or share my screen' },
+  { id: 'rush', label: 'They are rushing or threatening me' }
+];
+
+KW.PAUSE_CALLERS = [
+  'Police or a government officer',
+  'My bank',
+  'A family member or friend',
+  'An online buyer or seller',
+  'A company or courier',
+  'Someone else'
+];
+
+KW.RELATIONS = ['Son', 'Daughter', 'Grandchild', 'Spouse', 'Brother or sister', 'Friend', 'Neighbour', 'Volunteer', 'Other'];
+
+/* Scam Drills: safe practice scams, sent by family or by volunteers to a whole
+   estate. Each one copies a real pattern, so pressing Pause becomes a habit.
+   `types` links a drill to Scam Radar report types, so a newly verified scam
+   wave can become this week's drill. Links are shown as text, never opened. */
+KW.DRILLS = [
+  {
+    id: 'parcel-fee', name: 'Parcel fee SMS', types: ['Fake delivery SMS'], channel: 'SMS', from: 'SG-Parcel',
+    text: 'Your parcel could not be delivered due to an incomplete address. Pay S$1.80 within 24 hours to reschedule delivery, or it will be returned.',
+    link: 'sgparcel-redelivery.top',
+    lesson: ['Couriers don’t collect small fees through SMS links.', 'The 24-hour deadline is there to rush you.', 'Check a delivery by typing the courier’s official website yourself.']
+  },
+  {
+    id: 'police-call', name: 'Fake police officer', types: ['Government official impersonation'], channel: 'WhatsApp', from: '+65 8xxx 4417 · “Inspector Lim, SPF”',
+    text: 'This is Inspector Lim from the Singapore Police Force. Your bank account is linked to a money laundering case. Do not tell anyone, as this is confidential. Reply now to arrange a video call.',
+    link: null,
+    lesson: ['Real police officers never ask you to keep a case secret from family.', 'They will never ask you to transfer money to “help an investigation”.', 'Hang up, then call 1799 or your own contact at the police.']
+  },
+  {
+    id: 'bank-otp', name: 'Bank payment alert', types: ['Bank phishing'], channel: 'SMS', from: 'SG-BankAlert',
+    text: 'A payment of S$2,480.00 was made from your account. If this was not you, verify your identity immediately to stop the payment:',
+    link: 'secure-sgbank-verify.click',
+    lesson: ['Banks never send links that ask you to log in.', 'A big scary amount is meant to make you panic.', 'Call the number on the back of your card, not one in the message.']
+  },
+  {
+    id: 'new-number', name: '“New number” from family', types: ['Fake friend call', 'Love / romance scam'], channel: 'WhatsApp', from: '+65 9xxx 2093',
+    text: 'Hi Ma, this is my new number, my phone spoiled. Can help me pay a bill first? Need to settle today, I return you tonight. Don’t call the old number ok.',
+    link: null,
+    lesson: ['Call the person on their old number to check it’s really them.', '“Don’t call the old number” is a classic trick.', 'Agree on a family code word for any money request.']
+  },
+  {
+    id: 'easy-job', name: 'Easy part-time job', types: ['Job / task scam', 'Investment / crypto scam'], channel: 'Telegram', from: 'HR Recruiter Amanda',
+    text: 'Hi! We are hiring part-time. Earn $200 to $500 a day just by liking videos from home. No experience needed. Click to start your first task:',
+    link: 'easytask-sg.vip',
+    lesson: ['Real jobs don’t pay you to like videos.', 'Next they ask you to “top up” to unlock bigger tasks.', 'Unsolicited job offers on Telegram or WhatsApp are almost always scams.']
+  },
+  {
+    id: 'buyer-claim', name: 'Buyer asks for card details', types: ['Online shopping scam', 'Tech support scam', 'Other'], channel: 'SMS', from: 'Buyer on marketplace',
+    text: 'Hi, I have paid for your item already. Please claim your money through the secure payment page below, you need to key in your card details to receive.',
+    link: 'marketplace-safepay.online',
+    lesson: ['You never need card details to RECEIVE money.', 'Keep all chats and payments inside the marketplace app.', 'Fake “secure payment” pages steal your card details.']
+  }
+];
+
 /* Red-flag rules for the instant checker. Deliberately simple keyword
    heuristics — the point is to prompt a pause, not to give a verdict. */
 KW.FLAG_RULES = [
@@ -74,35 +137,35 @@ KW.FLAG_RULES = [
     tip: 'Scammers create panic so you act before thinking.',
     re: /\b(urgent(ly)?|immediately|within \d+ ?(hours?|hrs?|mins?|minutes|days?)|suspend(ed)?|frozen|final (notice|reminder|warning)|act now|expir(e|es|ed|ing)|blocked|arrest(ed)?|warrant|legal action|last chance)\b/i },
   { id: 'link', label: 'Contains a link',
-    tip: 'Don’t tap links in unexpected messages. Type the official website yourself.',
+    tip: 'Don’t tap it. Type the official website yourself.',
     re: /(https?:\/\/|www\.|bit\.ly|tinyurl|\b[a-z0-9-]+\.(xyz|top|click|info|cc|link|site|online|vip)\b)/i },
   { id: 'credentials', label: 'Asks for OTP, password or Singpass',
-    tip: 'Banks and government agencies will never ask for your OTP, PIN or Singpass details.',
+    tip: 'Banks and agencies never ask for these.',
     re: /\b(otp|one[- ]time password|pin|password|singpass|log ?in|verify your (account|identity|details)|card (number|details)|cvv|security code)\b/i },
   { id: 'payment', label: 'Asks you to pay or transfer money',
-    tip: 'Be very careful with any request to send money, top up or buy gift cards.',
+    tip: 'Be very careful with any request to send money or buy gift cards.',
     re: /\b(transfer|pay(ment)?|fee|deposit|gift ?cards?|top[- ]?up|bitcoin|crypto|usdt|paynow|bank account|safe account|lend|borrow)\b/i },
   { id: 'authority', label: 'Claims to be an authority or big company',
-    tip: 'Scammers pose as police, MOM, ICA, banks or couriers. Hang up and call the official number yourself.',
+    tip: 'Hang up and call the official number yourself.',
     re: /\b(police|spf|mom|moh|ica|iras|cpf|court|customs|singpost|courier|dhl|bank|government|ministry|officer|interpol)\b/i },
   { id: 'toogood', label: 'Sounds too good to be true',
-    tip: 'Prizes you never entered and “guaranteed” profits are classic bait.',
+    tip: 'Prizes you never entered are classic bait.',
     re: /\b(won|winner|prize|lucky draw|free gift|earn \$?\d+|guaranteed|high returns?|commission|cashback|\d+ ?% (returns?|profit))\b/i },
   { id: 'job', label: 'Easy job or task offer',
-    tip: 'Real jobs don’t pay you to like videos — or ask you to pay to earn.',
+    tip: 'Real jobs don’t pay you to like videos.',
     re: /\b(part[- ]time|work from home|like (videos|posts)|simple tasks?|daily pay|no experience|recruit(er|ment)?)\b/i },
   { id: 'secrecy', label: 'Asks you to keep it secret',
-    tip: 'Being told not to tell family or the bank is a big warning sign.',
+    tip: 'Being told not to tell family is a big warning sign.',
     re: /\b(don'?t tell|do not tell|keep (this|it) (secret|confidential|private)|do not inform|confidential)\b/i },
   { id: 'newcontact', label: 'Unknown contact claiming to know you',
-    tip: 'Call the person on their old number to check it’s really them.',
+    tip: 'Call them on their old number to check.',
     re: /\b(guess who|new number|changed my (number|phone)|this is my new|remember me|hi mum|hi dad)\b/i }
 ];
 
 /* Learning courses. Lesson bodies are trusted HTML authored here. */
 KW.COURSES = [
   {
-    id: 'sms', icon: '📱', title: 'Spotting phishing SMS & links', level: 'Beginner', minutes: 10,
+    id: 'sms', title: 'Spotting phishing SMS & links', level: 'Beginner', minutes: 10,
     blurb: 'Recognise fake delivery, bank and prize messages before you tap.',
     lessons: [
       { title: 'What phishing looks like', body: `
@@ -145,7 +208,7 @@ KW.COURSES = [
     ]
   },
   {
-    id: 'gov', icon: '👮', title: 'Fake officials & “police” calls', level: 'Intermediate', minutes: 12,
+    id: 'gov', title: 'Fake officials & “police” calls', level: 'Intermediate', minutes: 12,
     blurb: 'How government-official impersonation scams work and how to hang up safely.',
     lessons: [
       { title: 'How the scam unfolds', body: `
@@ -179,7 +242,7 @@ KW.COURSES = [
     ]
   },
   {
-    id: 'job', icon: '💼', title: 'Job & task scams', level: 'Beginner', minutes: 8,
+    id: 'job', title: 'Job & task scams', level: 'Beginner', minutes: 8,
     blurb: 'Why “earn $300/day liking videos” always ends with you paying.',
     lessons: [
       { title: 'The hook', body: `
@@ -208,7 +271,7 @@ KW.COURSES = [
     ]
   },
   {
-    id: 'invest', icon: '📈', title: 'Investment & crypto scams', level: 'Intermediate', minutes: 12,
+    id: 'invest', title: 'Investment & crypto scams', level: 'Intermediate', minutes: 12,
     blurb: 'Deepfake celebrity ads, “stock tip” groups and fake trading apps.',
     lessons: [
       { title: 'Where they find you', body: `
@@ -240,7 +303,7 @@ KW.COURSES = [
     ]
   },
   {
-    id: 'shop', icon: '🛒', title: 'Safe online shopping', level: 'Beginner', minutes: 8,
+    id: 'shop', title: 'Safe online shopping', level: 'Beginner', minutes: 8,
     blurb: 'Buying and selling on marketplaces without getting burned.',
     lessons: [
       { title: 'Buying safely', body: `
@@ -272,7 +335,7 @@ KW.COURSES = [
     ]
   },
   {
-    id: 'protect', icon: '🤝', title: 'Protecting our seniors', level: 'For everyone', minutes: 10,
+    id: 'protect', title: 'Protecting our seniors', level: 'For everyone', minutes: 10,
     blurb: 'How to help parents and neighbours stay safe — without lecturing.',
     lessons: [
       { title: 'Remember: Add, Check, Tell', body: `
@@ -284,7 +347,7 @@ KW.COURSES = [
       { title: 'Setting up a safer phone', body: `
         <ol>
           <li>Install the ScamShield app to filter scam calls and SMS.</li>
-          <li>In WhatsApp: Settings → Privacy → Calls → turn on <em>Silence unknown callers</em>.</li>
+          <li>In WhatsApp, open Settings, then Privacy, then Calls, and turn on <em>Silence unknown callers</em>.</li>
           <li>In the banking app: lower the daily transfer limit and switch on alerts for every transaction.</li>
           <li>Save family numbers with clear names, so “new number” tricks stand out.</li>
         </ol>` },
@@ -312,13 +375,13 @@ KW.SPOT_GAME = [
     explain: 'Unofficial domain, deadline pressure and an unexpected parcel. Check tracking in the official app instead.' },
   { from: 'SMS · Your bank', msg: 'A PayNow transfer of $50.00 to J TAN was made on 05 Oct. If unauthorised, call the number on the back of your card.', isScam: false,
     explain: 'No link, no request for details, and it tells you to use a number you already have. This is how genuine alerts look.' },
-  { from: 'WhatsApp · +44 7700 900123', msg: 'Hi Mum, I dropped my phone in the toilet 😭 this is my new number. Can you help me pay a bill urgently? Will pay you back tomorrow', isScam: true,
+  { from: 'WhatsApp · +44 7700 900123', msg: 'Hi Mum, I dropped my phone in the toilet this is my new number. Can you help me pay a bill urgently? Will pay you back tomorrow', isScam: true,
     explain: '“New number” plus an urgent money request. Call your child on their old number first.' },
-  { from: 'WhatsApp · Jess (Recruiter)', msg: 'Hi! I’m Jess from TalentHub. Earn $80–$500 daily just liking YouTube videos. No experience needed! Reply YES to start 😊', isScam: true,
+  { from: 'WhatsApp · Jess (Recruiter)', msg: 'Hi! I’m Jess from TalentHub. Earn $80–$500 daily just liking YouTube videos. No experience needed! Reply YES to start', isScam: true,
     explain: 'Unsolicited, too good to be true, and you’ll soon be asked to “top up” to continue.' },
   { from: 'SMS · just after you logged in', msg: 'Your OTP for login is 482910. Do not share this OTP with anyone, including bank staff.', isScam: false,
     explain: 'You triggered this OTP yourself and it warns you not to share it. If you didn’t request an OTP, someone may have your password — call your bank.' },
-  { from: 'WhatsApp · Tampines West RC group', msg: 'Reminder: Line dance class this Saturday 9am at the RC centre. Bring water! See you there 💃', isScam: false,
+  { from: 'WhatsApp · Tampines West RC group', msg: 'Reminder: Line dance class this Saturday 9am at the RC centre. Bring water! See you there', isScam: false,
     explain: 'A known group, no links, no requests for money or details.' },
   { from: 'Phone call · +65 6123 4567', msg: '(Recorded voice) “This is the Ministry of Health. There is an issue with your medical records. Press 1 to speak to an officer.”', isScam: true,
     explain: 'The “+” shows it’s from overseas. Agencies don’t make robocalls asking you to press 1.' },
@@ -391,7 +454,7 @@ KW.seed = function seed() {
       id: 'p1', flair: 'ask', author: 'AuntieRose_AMK', created: ago(3), votes: 42, image: null,
       title: 'Got an SMS saying my CPF will be frozen in 24 hours — real?',
       body: 'It says “CPF Board: Your account will be frozen within 24 hours due to incomplete verification. Log in with Singpass here” and then a link. I never had problems with CPF before. Should I click?',
-      poll: { options: [{ label: '🚩 Scam', votes: 31 }, { label: '👍 Looks legit', votes: 1 }, { label: '🤔 Not sure', votes: 3 }] },
+      poll: { options: [{ label: 'Scam', votes: 31 }, { label: 'Looks legit', votes: 1 }, { label: 'Not sure', votes: 3 }] },
       verdict: { result: 'scam', by: 'Uncle Tan · CC Scam-Buster' },
       comments: [
         { id: 'c1', author: 'Uncle Tan', role: 'Volunteer', created: ago(2.5), votes: 28,
@@ -407,13 +470,13 @@ KW.seed = function seed() {
       title: 'PSA: “Hi Mum, new number” WhatsApp messages going around Bedok',
       body: 'Several residents have received WhatsApp messages from unknown numbers pretending to be their children. They ask for urgent help paying a bill. Please call your children on their usual number before sending anything. Share with your parents!',
       comments: [
-        { id: 'c4', author: 'Resident-2210', created: ago(8), votes: 14, body: 'My mother got one yesterday. She replied “What’s your NRIC?” and they blocked her 😂', replies: [] }
+        { id: 'c4', author: 'Resident-2210', created: ago(8), votes: 14, body: 'My mother got one yesterday. She replied “What’s your NRIC?” and they blocked her', replies: [] }
       ]
     },
     {
       id: 'p3', flair: 'tips', author: 'Priya (Student Volunteer)', created: ago(30), votes: 120, image: null,
       title: 'How I set up my grandparents’ phones to block scam calls (step by step)',
-      body: '1. Install the ScamShield app and enable call & SMS filtering.\n2. WhatsApp → Settings → Privacy → Calls → Silence unknown callers.\n3. Banking app → lower the daily PayNow limit and turn on alerts for every transaction.\n4. Save family numbers with clear names like “Son – Daniel”.\n5. Put a sticker on the phone: “Money request? Call family first!”\nTook about 20 minutes per phone. Happy to help at Clementi CC on Saturdays!',
+      body: '1. Install the ScamShield app and enable call & SMS filtering.\n2. WhatsApp: open Settings, then Privacy, then Calls, and turn on Silence unknown callers.\n3. In the banking app, lower the daily PayNow limit and turn on alerts for every transaction.\n4. Save family numbers with clear names like “Son – Daniel”.\n5. Put a sticker on the phone: “Money request? Call family first!”\nTook about 20 minutes per phone. Happy to help at Clementi CC on Saturdays!',
       comments: [
         { id: 'c5', author: 'Resident-8812', created: ago(20), votes: 11, body: 'The sticker idea is genius. Doing this for my parents this weekend.', replies: [] },
         { id: 'c6', author: 'Hafiz', role: 'Volunteer', created: ago(18), votes: 7, body: 'Great list. Woodlands RC also runs these setup sessions — first Sunday of the month.', replies: [] }
@@ -442,7 +505,7 @@ KW.seed = function seed() {
       id: 'p6', flair: 'ask', author: 'Resident-5521', created: ago(1.5), votes: 7, image: null,
       title: 'Carousell buyer wants me to click a link to “receive payment”',
       body: 'Selling my old rice cooker. Buyer says they paid and I need to click a link and enter my bank details to receive the money. Something feels off?',
-      poll: { options: [{ label: '🚩 Scam', votes: 9 }, { label: '👍 Looks legit', votes: 0 }, { label: '🤔 Not sure', votes: 1 }] },
+      poll: { options: [{ label: 'Scam', votes: 9 }, { label: 'Looks legit', votes: 0 }, { label: 'Not sure', votes: 1 }] },
       comments: []
     },
     {
