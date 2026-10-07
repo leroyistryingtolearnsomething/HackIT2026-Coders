@@ -58,7 +58,8 @@
       progress: p.progress || {},
       gameBest: p.gameBest || 0,
       volunteer: p.volunteer || null,
-      homePause: p.homePause === true // emergency-button mode: off unless chosen
+      homePause: p.homePause === true, // emergency-button mode: off unless chosen
+      pauseLink: p.pauseLink || null // this device's emergency link (the server keeps only a hash)
     };
   }
 
@@ -494,7 +495,8 @@
     radar: renderRadar,
     community: renderCommunity,
     learn: renderLearn,
-    ai: renderAssistantPage
+    ai: renderAssistantPage,
+    sos: renderSos // emergency link from a phone shortcut
   };
 
   async function router() {
@@ -504,6 +506,7 @@
     current = { route, args: parts.slice(1) };
     if (map) { map.remove(); map = null; markerLayer = null; }
     clearInterval(pauseTimer);
+    clearInterval(sosTimer);
     cancelLaunch();
     $$('#siteNav a').forEach(a => {
       if (a.dataset.route === (route === 'home' ? 'pause' : route)) a.setAttribute('aria-current', 'page');
@@ -512,7 +515,7 @@
     $('#siteNav').classList.remove('open');
     $('#navToggle').setAttribute('aria-expanded', 'false');
     // The floating "Is this a scam?" button would cover the main buttons on these pages.
-    $('#fab').hidden = routes[route] === renderAsk || routes[route] === renderPause || route === 'ai';
+    $('#fab').hidden = routes[route] === renderAsk || routes[route] === renderPause || route === 'ai' || route === 'sos';
     document.body.classList.remove('route-ask');
     onLangChange = null;
     main.innerHTML = '<div class="page"><p class="kicker" role="status">Loading…</p></div>';
@@ -1451,6 +1454,7 @@
   function drawInstallZone() {
     const zone = $('#installZone');
     if (!zone) return;
+    const sosOpen = $('#sosBox') ? $('#sosBox').open : false;
     let how;
     if (isStandalone()) {
       how = '<p>Kampung Watch is on your home screen.</p>';
@@ -1470,11 +1474,17 @@
       <h2 class="kicker" id="installTitle">Pause from your home screen</h2>
       <p>When someone is pushing you to pay, you won’t have time to look for a website. Put Kampung Watch on your home screen: it opens on the Pause button, so help is two taps away.</p>
       ${how}
+      <details class="cf-more" id="sosBox">
+        <summary>${isIOS() ? 'Even faster: double-tap the back of your iPhone, or ask Siri' : 'Even faster: an emergency link for phone shortcuts'}</summary>
+        <div class="cf-more-body" id="sosLink"></div>
+      </details>
       <label class="check">
         <input type="checkbox" id="homePause" ${homePauseOn() ? 'checked' : ''}>
         Emergency button: opening Kampung Watch from my home screen starts Pause straight away
       </label>
       <p class="muted">Turn this on only if this phone uses Kampung Watch just for emergencies, for example a phone you set up for a parent.</p>`;
+    $('#sosBox').open = sosOpen;
+    drawSosLink();
   }
 
   /* The 5-second countdown before an alert goes out, so a mis-tap can be cancelled. */
@@ -1489,19 +1499,24 @@
     launch = null;
   }
 
-  function startLaunch() {
-    const own = pauseState.pauses.find(p => p.role === 'owner' && p.status === 'open');
-    if (own || launch) return; // already on: just show it
-    const members = pauseState.circle.mine ? pauseState.circle.mine.members : [];
-    const who = members.length
-      ? `${members.map(m => m.name).join(', ').replace(/, ([^,]*)$/, ' and $1')} will get an alert and call you.`
+  const nameList = names => names.join(', ').replace(/, ([^,]*)$/, ' and $1');
+  const buzz = () => {
+    // Phones only allow vibration after the person has touched the page.
+    if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate([200, 100, 200]);
+  };
+
+  /* Shows the 5-second countdown; send() runs when it reaches 0 or on "Send now". */
+  function startCountdown({ people, send, onCancel }) {
+    if (launch) return;
+    const who = people.length
+      ? `${nameList(people)} will get an alert and call you.`
       : 'Volunteers near you will get an alert and call you.';
     const el = document.createElement('div');
     el.className = 'launch-overlay';
     el.innerHTML = `
       <div class="launch-box" role="alertdialog" aria-modal="true" aria-labelledby="launchTitle" aria-describedby="launchWho">
         <p class="kicker">Pause</p>
-        <h2 class="launch-title" id="launchTitle">${members.length ? 'Alerting your Circle in' : 'Alerting volunteers in'} <span class="launch-count" id="launchCount">5</span></h2>
+        <h2 class="launch-title" id="launchTitle">${people.length ? 'Alerting your Circle in' : 'Alerting volunteers in'} <span class="launch-count" id="launchCount">5</span></h2>
         <p class="launch-who" id="launchWho">${esc(who)}</p>
         <div class="launch-actions">
           <button type="button" class="btn btn-primary btn-lg" id="launchNow">Send now</button>
@@ -1512,37 +1527,155 @@
     document.body.classList.add('modal-open');
 
     let left = 5;
-    const send = async () => {
-      cancelLaunch();
-      try {
-        await api.post('/pauses');
-        // Phones only allow vibration after the person has touched the page.
-        if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate([200, 100, 200]);
-      } catch (err) {
-        toast('Couldn’t send the alert. Don’t pay. Call someone you trust, or the ScamShield Helpline 1799.', 'warn');
-      }
-      await refreshPause();
-      const status = $('.pause-headline');
-      if (status) status.scrollIntoView({ block: 'center' });
-    };
+    const go = () => { cancelLaunch(); send(); };
     launch = {
       el,
       timer: setInterval(() => {
         left -= 1;
-        if (left <= 0) send();
+        if (left <= 0) go();
         else $('#launchCount').textContent = left;
       }, 1000),
       onKey: e => { if (e.key === 'Escape') cancelLaunch(); }
     };
     document.addEventListener('keydown', launch.onKey);
-    $('#launchNow').addEventListener('click', send);
+    $('#launchNow').addEventListener('click', go);
     $('#launchCancel').addEventListener('click', () => {
       cancelLaunch();
       toast('Cancelled. Nothing was sent.');
-      const btn = $('#pauseBtn');
-      if (btn) btn.focus();
+      if (onCancel) onCancel();
     });
     $('#launchCancel').focus(); // the safe choice gets the focus
+  }
+
+  function startLaunch() {
+    const own = pauseState.pauses.find(p => p.role === 'owner' && p.status === 'open');
+    if (own) return; // already on: just show it
+    startCountdown({
+      people: pauseState.circle.mine ? pauseState.circle.mine.members.map(m => m.name) : [],
+      send: async () => {
+        try {
+          await api.post('/pauses');
+          buzz();
+        } catch (err) {
+          toast('Couldn’t send the alert. Don’t pay. Call someone you trust, or the ScamShield Helpline 1799.', 'warn');
+        }
+        await refreshPause();
+        const status = $('.pause-headline');
+        if (status) status.scrollIntoView({ block: 'center' });
+      },
+      onCancel: () => { const btn = $('#pauseBtn'); if (btn) btn.focus(); }
+    });
+  }
+
+  /* ---------- emergency link (iPhone Back Tap / Siri shortcut) ----------
+     A shortcut opens the link in Safari, which doesn't share the home-screen app's
+     identity, so the link itself says whose Pause to press. The secret is after the
+     #, which browsers never send to a server. */
+  let sosTimer = null;
+  const sosUrl = token => `${location.origin}/#/sos/${token}`;
+
+  async function renderSos(seq, token) {
+    clearInterval(sosTimer);
+    const body = { token: token || '' };
+    let status;
+    try {
+      status = await api.post('/pause-link/status', body);
+    } catch (err) {
+      if (stale(seq)) return;
+      const offline = err.message === 'offline';
+      main.innerHTML = `
+        <div class="page sos-page">
+          <p class="kicker">Pause</p>
+          <h1 class="display">${offline ? 'No internet connection.' : 'This emergency link doesn’t work any more.'}</h1>
+          <p class="lede">${offline ? 'Your Circle can’t be alerted without a connection.' : 'Make a new one on the Pause page of Kampung Watch, then update your shortcut.'}</p>
+          <p class="lede">Being pressured to pay right now? Don’t pay. Call someone you trust, or the ScamShield Helpline <a href="tel:1799">1799</a>. In danger, call <a href="tel:999">999</a>.</p>
+        </div>`;
+      return;
+    }
+    if (stale(seq)) return;
+
+    const draw = s => {
+      const p = s.pause;
+      const who = s.people.length ? nameList(s.people) : 'Volunteers near you';
+      main.innerHTML = `
+        <div class="page sos-page">
+          <p class="kicker">Pause${s.name ? ` · ${esc(s.name)}` : ''}</p>
+          ${p ? `
+            <h1 class="pause-headline" role="status">${p.responder
+              ? `${esc(p.responder.name)} is calling you now.`
+              : p.stage === 'volunteer' && s.people.length
+                ? 'Volunteers near you have been alerted too.'
+                : `${esc(who)} ${s.people.length > 1 ? 'have' : 'has'} been alerted.`}</h1>
+            ${p.responder ? `<p class="lede">${esc(p.responder.detail)}</p>` : '<p class="lede">Someone will call you. Keep your phone near you.</p>'}
+            <ol class="pause-steps">
+              <li><strong>Don’t pay, and don’t share any code.</strong> Not even to “stop” something.</li>
+              <li><strong>It’s OK to hang up.</strong> Real police officers and banks won’t mind.</li>
+              <li><strong>Wait for the call,</strong> or call the ScamShield Helpline <a href="tel:1799">1799</a>.</li>
+            </ol>
+            <p class="muted">To message your Circle or say you’re safe, open Kampung Watch from your home screen.</p>`
+          : `
+            <h1 class="display">Someone pushing you to pay?</h1>
+            <p><button type="button" class="pause-btn" id="sosBtn"><span class="pause-btn-word">Pause</span><span class="pause-btn-sub">Alert ${esc(s.people.length ? 'my Circle' : 'a volunteer')}</span></button></p>
+            <p class="cf-help">Money leaving your account right now? Call <a href="tel:999">999</a>. For advice, call the ScamShield Helpline <a href="tel:1799">1799</a>.</p>`}
+        </div>`;
+      const btn = $('#sosBtn');
+      if (btn) btn.addEventListener('click', () => countdown(s));
+    };
+
+    const watch = () => {
+      clearInterval(sosTimer);
+      sosTimer = setInterval(async () => {
+        const s = await api.post('/pause-link/status', body).catch(() => null);
+        if (s && current.route === 'sos') draw(s);
+      }, 3000);
+    };
+
+    const countdown = s => startCountdown({
+      people: s.people,
+      send: async () => {
+        try {
+          const res = await api.post('/pause-link/press', body);
+          buzz();
+          draw(res);
+          watch();
+        } catch (err) {
+          toast('Couldn’t send the alert. Don’t pay. Call someone you trust, or the ScamShield Helpline 1799.', 'warn');
+        }
+      },
+      onCancel: () => { const b = $('#sosBtn'); if (b) b.focus(); }
+    });
+
+    draw(status);
+    if (status.pause) watch();
+    else countdown(status);
+  }
+
+  async function drawSosLink() {
+    const box = $('#sosLink');
+    if (!box) return;
+    let active = false;
+    try { active = (await api.get('/pause-link')).active; } catch (e) { /* offline */ }
+    const token = active && prefs.pauseLink ? prefs.pauseLink : null;
+    if (!box.isConnected) return;
+    box.innerHTML = token ? `
+        <p>Your emergency link. Keep it private: anyone with it can press Pause for you.</p>
+        <p><code class="sos-url">${esc(sosUrl(token))}</code></p>
+        <div class="btn-row">
+          <button type="button" class="btn btn-secondary" id="copySos">Copy link</button>
+          <button type="button" class="btn btn-ghost" id="newSos">Make a new link</button>
+          <button type="button" class="btn btn-ghost" id="offSos">Turn off</button>
+        </div>
+        ${isIOS() ? `
+          <ol class="install-steps">
+            <li>Open the <strong>Shortcuts</strong> app, tap <strong>+</strong>, and add the action <strong>Open URLs</strong>.</li>
+            <li>Paste your link into it. Name the shortcut <strong>Kampung Pause</strong>.</li>
+            <li>Go to <strong>Settings › Accessibility › Touch › Back Tap › Double Tap</strong> and choose <strong>Kampung Pause</strong>.</li>
+          </ol>
+          <p class="muted">Now a double-tap on the back of your phone, or “Hey Siri, Kampung Pause”, starts Pause. You still get 5 seconds to cancel.</p>`
+        : '<p class="muted">Save it as a bookmark or home-screen shortcut, or attach it to your phone’s gesture or assistant shortcuts. Opening it starts Pause, with 5 seconds to cancel.</p>'}`
+      : `
+        <p>${active ? 'You made an emergency link on another device or before clearing this browser. Make a new one here (the old one stops working).' : 'Make a private link that starts Pause, for a phone shortcut.'}</p>
+        <p><button type="button" class="btn btn-secondary" id="newSos">Make my emergency link</button></p>`;
   }
 
   /* ---------- people you look after ---------- */
@@ -1743,6 +1876,27 @@
       installPrompt = null;
       promptEvent.prompt();
       promptEvent.userChoice.finally(drawInstallZone);
+    } else if (b.id === 'newSos') {
+      if (prefs.pauseLink && !confirm('Make a new link? The old one will stop working, so update your shortcut too.')) return;
+      act(b, async () => {
+        prefs.pauseLink = (await api.post('/pause-link')).token;
+        savePrefs();
+        await drawSosLink();
+        toast('Emergency link ready. Copy it into your shortcut.', 'ok');
+      });
+    } else if (b.id === 'offSos') {
+      if (!confirm('Turn off your emergency link? Shortcuts using it will stop working.')) return;
+      act(b, async () => {
+        await api.del('/pause-link');
+        prefs.pauseLink = null;
+        savePrefs();
+        await drawSosLink();
+      });
+    } else if (b.id === 'copySos') {
+      const url = $('.sos-url').textContent;
+      (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject())
+        .then(() => toast('Link copied. Paste it into your shortcut.', 'ok'))
+        .catch(() => toast('Press and hold the link to copy it.'));
     } else if (b.id === 'pauseBtn') {
       startLaunch(); // 5 seconds to cancel a stray tap; sends by itself after that
     } else if (d.jump) {

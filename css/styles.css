@@ -671,6 +671,12 @@ body.route-ask .fab { display: none; }
 .launch-actions { display: flex; flex-direction: column; gap: var(--space-2); }
 .launch-actions .btn { width: 100%; min-height: 3.5rem; font-size: 1.1875rem; white-space: normal; }
 
+/* Emergency link page (opened by a phone shortcut) */
+.sos-page { display: flex; flex-direction: column; gap: var(--space-4); }
+.sos-page p { margin: 0; }
+.sos-page .pause-btn { margin-block: var(--space-4); }
+.sos-url { display: block; font-size: 1rem; padding: var(--space-2); }
+
 .alert-banner.alert-pause { background: var(--color-accent-2-700); color: var(--color-bg); }
 .alert-pause .btn-secondary { background: var(--color-bg); color: var(--color-text); border-color: var(--color-bg); }
 .alert-pause .btn-ghost { color: var(--color-bg); }
