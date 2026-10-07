@@ -18,7 +18,7 @@ export function replyFor(row) {
   let body, verdict;
   if (row.level === 'high') {
     verdict = 'scam';
-    body = `${greet}Thanks for checking with us first 👍 This looks like a scam. I noticed:\n${flagText}\n\nPlease don’t click any links, reply or transfer money. Block the sender and report it in the ScamShield app. If you’ve already shared bank details, call your bank’s 24-hour hotline right away.`;
+    body = `${greet}Thanks for checking with us first. This looks like a scam. I noticed:\n${flagText}\n\nPlease don’t click any links, reply or transfer money. Block the sender and report it in the ScamShield app. If you’ve already shared bank details, call your bank’s 24-hour hotline right away.`;
   } else if (row.level === 'medium') {
     verdict = 'suspicious';
     body = `${greet}There are some warning signs here:\n${flagText}\n\nDon’t act on it yet. Contact the organisation directly using the number on their official website or the back of your card — not the one in the message. Happy to help you check further!`;

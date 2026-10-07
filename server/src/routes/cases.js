@@ -36,7 +36,6 @@ export default function casesRouter({ db, hub, images, bot }) {
     const b = req.body || {};
     const body = text(b.text, 'text', { max: 4000 });
     const image = images.save(b.image);
-    if (!body && !image) throw badRequest('Paste the message or add a screenshot');
 
     let callback = null;
     if (b.callback) {
@@ -48,6 +47,8 @@ export default function casesRouter({ db, hub, images, bot }) {
         lang: LANGS.includes(b.callback.lang) ? b.callback.lang : 'English'
       };
     }
+    // A call-back request on its own is fine: some residents would rather talk than type.
+    if (!body && !image && !callback) throw badRequest('Paste the message or add a screenshot');
 
     const { flags, level } = analyse(body);
     const id = newId('k');

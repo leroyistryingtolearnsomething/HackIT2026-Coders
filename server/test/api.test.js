@@ -203,3 +203,13 @@ test('unknown endpoints and private files', async () => {
   const pkg = await fetch(base.replace('/api', '') + '/server/package.json');
   assert.equal(pkg.status, 404);
 });
+
+test('cases: a call-back request needs no message, but an empty case is refused', async () => {
+  assert.equal((await call('POST', '/cases', { body: { channel: 'Phone call', text: '' } })).status, 400);
+  const c = await call('POST', '/cases', {
+    body: { channel: 'Phone call', text: '', callback: { name: 'Rosnah', phone: '8123 4567', lang: 'Bahasa Melayu' } }
+  });
+  assert.equal(c.status, 201);
+  assert.equal(c.data.callback.lang, 'Bahasa Melayu');
+  assert.equal(c.data.text, '');
+});

@@ -54,6 +54,8 @@ KW.FLAIRS = [
 
 KW.VOLUNTEERS = [
   { name: 'Aunty Mei Ling', role: 'Digital Ambassador', area: 'Tampines', langs: 'English, 华语' },
+  { name: 'Mrs Kavitha', role: 'RC Volunteer', area: 'Tampines', langs: 'English, தமிழ்' },
+  { name: 'Encik Hafiz', role: 'CC Scam-Buster', area: 'Tampines', langs: 'English, Melayu' },
   { name: 'Hafiz', role: 'RC Volunteer', area: 'Woodlands', langs: 'English, Melayu' },
   { name: 'Priya', role: 'Student Volunteer', area: 'Clementi', langs: 'English, தமிழ்' },
   { name: 'Uncle Tan', role: 'CC Scam-Buster', area: 'Ang Mo Kio', langs: 'English, 华语, Hokkien' },

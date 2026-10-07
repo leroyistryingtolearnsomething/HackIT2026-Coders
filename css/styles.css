@@ -4,6 +4,40 @@
    so the "Text size A+" setting (html.large-text) scales the whole site.
    Sections are separated by whitespace, not borders, boxes or cards. */
 
+/* Kopitiam Corner palette (design 2a): pandan green and chili red on
+   kopitiam cream. These override the Broadsheet colour tokens; every
+   other rule reads them through var(). */
+:root {
+  --color-bg: #f6f0e4;
+  --color-surface: #ece3d1;
+  --color-text: #2a2118;
+  --color-divider: rgba(42, 33, 24, .16);
+
+  --color-accent: #2f7d55;
+  --color-accent-100: #e6f3ea;
+  --color-accent-200: #c9e6d3;
+  --color-accent-300: #9fd2b2;
+  --color-accent-400: #5fae84;
+  --color-accent-500: #3f9268;
+  --color-accent-600: #276b48;
+  --color-accent-700: #1e5638;
+  --color-accent-800: #164029;
+  --color-accent-900: #0f2b1c;
+
+  --color-accent-2: #c4402b;
+  --color-accent-2-100: #fbe9e4;
+  --color-accent-2-200: #f6cfc6;
+  --color-accent-2-600: #ab3724;
+  --color-accent-2-700: #962f1f;
+  --color-accent-2-800: #6e2216;
+  /* Steps the design doesn't list, filled in on the same chili ramp so
+     nothing falls back to Broadsheet's magenta. */
+  --color-accent-2-300: #eeab9c;
+  --color-accent-2-400: #e07a63;
+  --color-accent-2-500: #cf5640;
+  --color-accent-2-900: #46160e;
+}
+
 :root {
   --gutter: calc(var(--space-8) * 1.8);    /* 72px side padding */
   --gap-xl: calc(var(--space-8) * 1.8);    /* 72px column gap */
@@ -92,6 +126,7 @@ textarea.input { line-height: 1.75rem; }
 
 /* ---------- header, footer and global UI ---------- */
 .site-bar { padding: var(--space-3) var(--gutter); flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+.nav-town { font-weight: 400; color: var(--ink-70); }
 .site-bar .nav-brand { color: var(--color-text); text-decoration: none; font-size: 1.125rem; min-height: 44px; display: inline-flex; align-items: center; gap: var(--space-2); }
 .logo { width: 2.25rem; height: 2.25rem; flex: none; }
 .logo-bg { fill: var(--color-accent-700); }
@@ -199,33 +234,39 @@ body.route-ask .site-footer,
 body.route-ask .fab { display: none; }
 
 .check-first {
-  --cf-gutter: var(--gutter);
-  --cf-col-gap: var(--gap-xl);
-  --cf-top: var(--top);
-  --cf-bottom: var(--bottom);
-  --cf-stack: var(--gap-lg);
-  max-width: 1200px; margin-inline: auto;
+  /* Design 2a is compact: 48px sides, 36px top, 28px between blocks, 40px between columns. */
+  --cf-gutter: 3rem;
+  --cf-col-gap: 2.5rem;
+  --cf-top: 2.25rem;
+  --cf-bottom: 2.75rem;
+  --cf-stack: 1.75rem;
+  max-width: 1100px; margin-inline: auto;
 }
 .check-first p { margin: 0; }
 
 
 .cf-body { padding: var(--cf-top) var(--cf-gutter) var(--cf-bottom); display: flex; flex-direction: column; gap: var(--cf-stack); }
+.cf-intro { display: flex; flex-direction: column; gap: .375rem; }
+.cf-greeting { font-size: 1.0625rem; font-style: italic; color: var(--color-accent-700); }
+.cf-greeting[hidden] { display: none; }
 .cf-headline {
   font-family: var(--font-heading); font-weight: var(--font-heading-weight);
-  font-size: 4rem; line-height: 4.375rem; letter-spacing: -0.02em;
-  margin: 0 0 0 -0.035em; max-width: 16ch;
+  font-size: 3rem; line-height: 3.375rem; letter-spacing: -0.02em;
+  margin: 0 0 0 -0.035em;
 }
 .cf-columns { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: var(--cf-col-gap); align-items: start; }
 
-.cf-input { display: flex; flex-direction: column; gap: var(--space-4); }
+.cf-input { display: flex; flex-direction: column; gap: .875rem; }
 .cf-input .field > label { font-size: 1.1875rem; margin-bottom: var(--space-2); }
-.check-first textarea.input { font-size: 1.25rem; line-height: 1.875rem; padding: var(--space-3); min-height: 0; }
+.check-first textarea.input { font-size: 1.25rem; line-height: 1.875rem; padding: .875rem; min-height: 0; resize: vertical; }
 .cf-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-.check-first .cf-actions .btn { min-height: 3.25rem; font-size: 1.125rem; padding-inline: calc(var(--space-4) * 1.2); }
+.cf-actions { gap: .75rem; }
+.check-first .cf-actions .btn { min-height: 3.25rem; font-size: 1.125rem; padding-inline: 1.375rem; }
 .cf-shot { display: flex; align-items: center; gap: var(--space-3); }
 .cf-shot[hidden] { display: none; }
 .cf-shot img { max-height: 7.5rem; width: auto; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
 .cf-help, .cf-note { color: var(--ink-78); }
+.cf-help { font-size: 1.0625rem; line-height: 1.625rem; }
 .cf-help a {
   color: var(--color-text); font-weight: 600; text-decoration: none;
   /* a 44px-tall tap area without moving the line */
@@ -233,21 +274,43 @@ body.route-ask .fab { display: none; }
 }
 .cf-help a:hover { text-decoration: underline; }
 
-.cf-results { display: flex; flex-direction: column; gap: calc(var(--space-4) * 1.2); }
-.cf-verdict { font-family: var(--font-heading); font-size: 2rem; line-height: 2.5rem; color: var(--color-accent-2-700); }
-.cf-flags { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-4); }
+.cf-results { display: flex; flex-direction: column; gap: .875rem; }
+.cf-verdict { font-family: var(--font-heading); font-size: 1.75rem; line-height: 2.125rem; color: var(--color-accent-2-700); }
+.cf-flags { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .75rem; }
 .cf-flags:empty { display: none; }
-.cf-flags li { display: grid; grid-template-columns: var(--space-8) 1fr; gap: var(--space-1) calc(var(--space-2) * 1.2); }
-.cf-flag-n { grid-row: span 2; font-family: var(--font-heading); font-size: 1.75rem; line-height: 1.875rem; color: var(--color-accent-2-700); }
-.cf-flag-label { font-size: 1.25rem; line-height: 1.75rem; font-weight: 600; }
-.cf-flag-tip { line-height: 1.625rem; color: var(--ink-78); }
+.cf-flags li { display: grid; grid-template-columns: 2rem 1fr; gap: .125rem .625rem; }
+.cf-flag-n { grid-row: span 2; font-family: var(--font-heading); font-size: 1.5rem; line-height: 1.75rem; color: var(--color-accent-2-700); }
+.cf-flag-label { font-size: 1.1875rem; line-height: 1.625rem; font-weight: 600; }
+.cf-flag-tip { font-size: 1.0625rem; line-height: 1.5rem; color: var(--ink-78); }
 .cf-footnote { line-height: 1.625rem; font-style: italic; color: var(--ink-70); }
 
-.cf-below { padding-top: var(--cf-stack); max-width: 40rem; }
+.cf-more { max-width: 40rem; }
 .cf-more summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--color-accent-700); font-weight: 600; }
 .cf-more-body { display: grid; gap: var(--space-4); padding-top: var(--space-3); }
 .cf-callback { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
 .cf-callback .field:last-child { grid-column: 1 / -1; }
+
+.cf-neighbours {
+  display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: var(--cf-col-gap);
+  padding-top: 1.5rem; border-top: 1px solid var(--color-divider);
+}
+.cf-neighbours > section { display: flex; flex-direction: column; gap: .75rem; }
+.duty-list, .block-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .75rem; }
+.duty { display: flex; align-items: center; gap: .875rem; }
+.duty-avatar {
+  width: 2.75rem; height: 2.75rem; flex: none; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--color-accent-200); color: var(--color-accent-800);
+  font-family: var(--font-heading); font-size: 1.0625rem;
+}
+.duty-who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.duty-name { font-size: 1.125rem; line-height: 1.5rem; font-weight: 600; }
+.duty-meta { font-size: .96875rem; line-height: 1.375rem; color: color-mix(in srgb, var(--color-text) 72%, transparent); }
+.block-row { display: flex; align-items: baseline; gap: .5rem; font-size: 1.0625rem; line-height: 1.625rem; }
+.block-title { color: var(--color-text); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+.block-title:hover { text-decoration: underline; }
+.block-leader { flex: 1; min-width: 1.25rem; align-self: center; border-bottom: 1px dotted color-mix(in srgb, var(--color-text) 45%, transparent); }
+.block-count { font-family: var(--font-heading); color: var(--color-accent-700); }
 
 .cf-cases { padding: 0 var(--cf-gutter) var(--cf-bottom); }
 .cf-cases h2 { font-size: 2rem; line-height: 2.5rem; margin: 0 0 var(--space-6); }
@@ -606,7 +669,7 @@ body.route-ask .fab { display: none; }
 
 @media (max-width: 960px) {
   :root { --gutter: var(--space-8); --gap-xl: var(--space-8); --top: calc(var(--space-8) * 1.6); }
-  .display, .cf-headline { font-size: 3.25rem; line-height: 3.625rem; }
+  .display { font-size: 3.25rem; line-height: 3.625rem; }
   .display-sm { font-size: 2.5rem; line-height: 2.875rem; }
 
   .nav-toggle { display: inline-flex; }
@@ -628,7 +691,9 @@ body.route-ask .fab { display: none; }
   .display-sm { font-size: 2rem; line-height: 2.5rem; }
   .section-title { font-size: 1.625rem; line-height: 2.125rem; }
 
-  .cf-columns { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
+  /* Stacks as: input, results, neighbours on duty, block alerts. */
+  .check-first { --cf-gutter: var(--space-4); --cf-top: var(--space-6); }
+  .cf-columns, .cf-neighbours { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
   .cf-actions .btn { flex: 1 1 100%; }
   .cf-callback, .form-grid { grid-template-columns: minmax(0, 1fr); }
   .dialog { padding: var(--space-4); }
