@@ -76,6 +76,18 @@ export function createApp(overrides = {}) {
   app.use('/css', express.static(path.join(WEB_ROOT, 'css')));
   app.use('/js', express.static(path.join(WEB_ROOT, 'js')));
   app.get('/', (req, res) => res.sendFile(path.join(WEB_ROOT, 'index.html')));
+  // Installable app: manifest, icons and the service worker (served from the root so it covers the whole site).
+  app.use('/icons', express.static(path.join(WEB_ROOT, 'icons'), { maxAge: '7d' }));
+  // iPhones and some browsers look for the icon at these fixed addresses too.
+  const icon = file => (req, res) => res.type('image/png').sendFile(path.join(WEB_ROOT, 'icons', file));
+  app.get(['/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'], icon('apple-touch-icon.png'));
+  app.get('/favicon.ico', icon('icon-192.png'));
+  app.get('/manifest.webmanifest', (req, res) =>
+    res.type('application/manifest+json').sendFile(path.join(WEB_ROOT, 'manifest.webmanifest')));
+  app.get('/sw.js', (req, res) => {
+    res.set('Cache-Control', 'no-cache'); // so phones pick up a new service worker straight away
+    res.type('text/javascript').sendFile(path.join(WEB_ROOT, 'sw.js'));
+  });
 
   const close = () => {
     bot.stop();

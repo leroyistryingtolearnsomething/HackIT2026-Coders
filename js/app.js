@@ -57,7 +57,8 @@
       subscription: p.subscription || { town: '', enabled: false },
       progress: p.progress || {},
       gameBest: p.gameBest || 0,
-      volunteer: p.volunteer || null
+      volunteer: p.volunteer || null,
+      homePause: p.homePause === true // emergency-button mode: off unless chosen
     };
   }
 
@@ -380,24 +381,66 @@
   $('#footerHelplines').innerHTML = KW.HELPLINES.map(h =>
     `<li><a href="tel:${h.number.replace(/\s/g, '')}">${esc(h.number)}</a> <span>${esc(h.label)}</span><span class="muted">${esc(h.note)}</span></li>`).join('');
 
-  /* ---------- live updates ---------- */
+  /* ---------- live updates ----------
+     A Server-Sent Events stream, with polling as a backup: some networks and
+     tunnels hold the stream back, and a Pause alert must still get through. */
   let events = null;
+  let pollTimer = null;
+  let lastEventId = 0;
+  let connection = 0; // bumped on every reconnect, so an old fallback timer can't fire
 
-  function connectEvents() {
-    if (!window.EventSource) return;
-    if (events) events.close();
-    const q = new URLSearchParams({ clientId: prefs.clientId });
-    if (prefs.volunteer) q.set('token', prefs.volunteer.token);
-    events = new EventSource('/api/events?' + q);
-    const on = (name, fn) => events.addEventListener(name, e => {
-      try { fn(JSON.parse(e.data)); } catch (err) { console.error(err); }
-    });
-    on('report', onReportEvent);
-    on('case', onCaseEvent);
-    on('post', onPostEvent);
-    on('pause', onPauseEvent);
-    on('drill', onDrillEvent);
-    on('circle', onCircleEvent);
+  const EVENT_HANDLERS = {
+    report: d => onReportEvent(d),
+    case: d => onCaseEvent(d),
+    post: d => onPostEvent(d),
+    pause: d => onPauseEvent(d),
+    drill: d => onDrillEvent(d),
+    circle: d => onCircleEvent(d)
+  };
+
+  function handleEvent(name, id, data) {
+    if (id && id <= lastEventId) return; // already handled
+    if (id) lastEventId = id;
+    try { EVENT_HANDLERS[name](data); } catch (err) { console.error(err); }
+  }
+
+  async function connectEvents() {
+    const mine = ++connection;
+    if (events) { events.close(); events = null; }
+    clearInterval(pollTimer);
+    pollTimer = null;
+
+    const auth = new URLSearchParams({ clientId: prefs.clientId });
+    if (prefs.volunteer) auth.set('token', prefs.volunteer.token);
+    // Where to pick up from if we end up polling.
+    try { lastEventId = (await api.get('/events/poll')).last; } catch (e) { /* offline: start from the stream */ }
+    if (mine !== connection) return;
+
+    if (!window.EventSource) { startPolling(); return; }
+    let live = false;
+    events = new EventSource('/api/events?' + auth);
+    events.addEventListener('ready', () => { live = true; });
+    Object.keys(EVENT_HANDLERS).forEach(name => events.addEventListener(name, e => {
+      live = true;
+      handleEvent(name, Number(e.lastEventId) || 0, JSON.parse(e.data));
+    }));
+    setTimeout(() => {
+      if (mine === connection && !live) startPolling(); // the stream is being held back
+    }, 5000);
+  }
+
+  function startPolling() {
+    if (events) { events.close(); events = null; }
+    clearInterval(pollTimer);
+    const poll = async () => {
+      try {
+        const res = await api.get('/events/poll?after=' + lastEventId);
+        res.events.forEach(e => handleEvent(e.event, e.id, e.data));
+        lastEventId = Math.max(lastEventId, res.last);
+      } catch (e) { /* offline for a moment: try again next time */ }
+    };
+    pollTimer = setInterval(poll, 3000);
+    poll();
   }
 
   async function onReportEvent({ id, action }) {
@@ -461,6 +504,7 @@
     current = { route, args: parts.slice(1) };
     if (map) { map.remove(); map = null; markerLayer = null; }
     clearInterval(pauseTimer);
+    cancelLaunch();
     $$('#siteNav a').forEach(a => {
       if (a.dataset.route === (route === 'home' ? 'pause' : route)) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
@@ -494,6 +538,7 @@
           <p class="kicker">${offline ? 'Offline' : 'Error'}</p>
           <h1 class="display">${offline ? 'Can’t reach the Kampung Watch server.' : 'Something went wrong.'}</h1>
           <p class="lede">${offline ? 'Check your connection. If you’re running it yourself, start the server with <code>npm start</code> in the project folder.' : esc(err.message)}</p>
+          ${offline ? `<p class="lede">Being pressured to pay right now? Don’t pay. Call someone you trust, or the ScamShield Helpline <a href="tel:1799">1799</a>. In danger, call <a href="tel:999">999</a>.</p>` : ''}
           <button type="button" class="btn btn-primary btn-lg" id="retryBtn">Try again</button>
         </div>
       </div>`;
@@ -1170,7 +1215,7 @@
     paintHeader(); // the header shows the town from the resident's Circle
   }
 
-  async function renderPause(seq) {
+  async function renderPause(seq, sub) {
     await loadPauseData();
     if (stale(seq)) return;
     main.innerHTML = `
@@ -1185,6 +1230,7 @@
           </div>
         </header>
         <section id="pauseZone" class="pause-zone" aria-label="Pause"></section>
+        <section id="installZone" class="section install-zone" aria-labelledby="installTitle"></section>
         <section id="guardZone" class="section" aria-labelledby="guardTitle" hidden></section>
         <section id="volPauseZone" class="section vol-only" aria-labelledby="volPauseTitle"></section>
         <section id="circleZone" class="section" aria-labelledby="circleTitle"></section>
@@ -1198,6 +1244,12 @@
     page.addEventListener('submit', onPauseSubmit);
     page.addEventListener('change', onPauseChange);
     redrawPause();
+    if (sub === 'now') {
+      // Back or reload must never send a second alert.
+      history.replaceState(null, '', '#/pause');
+      current.args = [];
+      startLaunch();
+    }
   }
 
   async function refreshPause() {
@@ -1214,6 +1266,7 @@
     const activeId = document.activeElement && page.contains(document.activeElement) ? document.activeElement.id : null;
 
     drawPauseZone();
+    drawInstallZone();
     drawGuardZone();
     drawVolPauseZone();
     drawCircleZone();
@@ -1372,6 +1425,124 @@
         ${pauseReplyForm(p, `Message ${p.name}…`)}
         ${outcomeButtons(p, false)}
       </div>`;
+  }
+
+  /* ---------- one tap from the home screen ---------- */
+  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  /* "Emergency button" mode: opening the app from the home screen starts the Pause
+     countdown straight away. Off unless chosen, so people can open the app for
+     everything else without sending (or having to cancel) an alert every time. */
+  const homePauseOn = () => prefs.homePause === true;
+
+  let installPrompt = null; // Android/Chrome's install dialog, saved until the button is pressed
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    installPrompt = e;
+    if ($('#installZone')) drawInstallZone();
+  });
+  window.addEventListener('appinstalled', () => {
+    installPrompt = null;
+    toast('Kampung Watch is on your home screen. Tap it whenever someone pressures you to pay.', 'ok');
+    if ($('#installZone')) drawInstallZone();
+  });
+
+  function drawInstallZone() {
+    const zone = $('#installZone');
+    if (!zone) return;
+    let how;
+    if (isStandalone()) {
+      how = '<p>Kampung Watch is on your home screen.</p>';
+    } else if (!window.isSecureContext) {
+      how = '<p class="muted">Adding to the home screen needs the secure (https://) address of Kampung Watch. Open it from that address on your phone.</p>';
+    } else if (installPrompt) {
+      how = '<p><button type="button" class="btn btn-primary btn-lg" id="installBtn">Add to home screen</button></p>';
+    } else if (isIOS()) {
+      how = `<ol class="install-steps">
+          <li>Tap the <strong>Share</strong> button in Safari (the square with an arrow).</li>
+          <li>Choose <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</li>
+        </ol>`;
+    } else {
+      how = '<p>Open your browser’s menu and choose <strong>Add to Home screen</strong> or <strong>Install app</strong>.</p>';
+    }
+    zone.innerHTML = `
+      <h2 class="kicker" id="installTitle">Pause from your home screen</h2>
+      <p>When someone is pushing you to pay, you won’t have time to look for a website. Put Kampung Watch on your home screen: it opens on the Pause button, so help is two taps away.</p>
+      ${how}
+      <label class="check">
+        <input type="checkbox" id="homePause" ${homePauseOn() ? 'checked' : ''}>
+        Emergency button: opening Kampung Watch from my home screen starts Pause straight away
+      </label>
+      <p class="muted">Turn this on only if this phone uses Kampung Watch just for emergencies, for example a phone you set up for a parent.</p>`;
+  }
+
+  /* The 5-second countdown before an alert goes out, so a mis-tap can be cancelled. */
+  let launch = null;
+
+  function cancelLaunch() {
+    if (!launch) return;
+    clearInterval(launch.timer);
+    document.removeEventListener('keydown', launch.onKey);
+    launch.el.remove();
+    document.body.classList.remove('modal-open');
+    launch = null;
+  }
+
+  function startLaunch() {
+    const own = pauseState.pauses.find(p => p.role === 'owner' && p.status === 'open');
+    if (own || launch) return; // already on: just show it
+    const members = pauseState.circle.mine ? pauseState.circle.mine.members : [];
+    const who = members.length
+      ? `${members.map(m => m.name).join(', ').replace(/, ([^,]*)$/, ' and $1')} will get an alert and call you.`
+      : 'Volunteers near you will get an alert and call you.';
+    const el = document.createElement('div');
+    el.className = 'launch-overlay';
+    el.innerHTML = `
+      <div class="launch-box" role="alertdialog" aria-modal="true" aria-labelledby="launchTitle" aria-describedby="launchWho">
+        <p class="kicker">Pause</p>
+        <h2 class="launch-title" id="launchTitle">${members.length ? 'Alerting your Circle in' : 'Alerting volunteers in'} <span class="launch-count" id="launchCount">5</span></h2>
+        <p class="launch-who" id="launchWho">${esc(who)}</p>
+        <div class="launch-actions">
+          <button type="button" class="btn btn-primary btn-lg" id="launchNow">Send now</button>
+          <button type="button" class="btn btn-secondary btn-lg" id="launchCancel">Cancel, I tapped by mistake</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    document.body.classList.add('modal-open');
+
+    let left = 5;
+    const send = async () => {
+      cancelLaunch();
+      try {
+        await api.post('/pauses');
+        // Phones only allow vibration after the person has touched the page.
+        if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate([200, 100, 200]);
+      } catch (err) {
+        toast('Couldn’t send the alert. Don’t pay. Call someone you trust, or the ScamShield Helpline 1799.', 'warn');
+      }
+      await refreshPause();
+      const status = $('.pause-headline');
+      if (status) status.scrollIntoView({ block: 'center' });
+    };
+    launch = {
+      el,
+      timer: setInterval(() => {
+        left -= 1;
+        if (left <= 0) send();
+        else $('#launchCount').textContent = left;
+      }, 1000),
+      onKey: e => { if (e.key === 'Escape') cancelLaunch(); }
+    };
+    document.addEventListener('keydown', launch.onKey);
+    $('#launchNow').addEventListener('click', send);
+    $('#launchCancel').addEventListener('click', () => {
+      cancelLaunch();
+      toast('Cancelled. Nothing was sent.');
+      const btn = $('#pauseBtn');
+      if (btn) btn.focus();
+    });
+    $('#launchCancel').focus(); // the safe choice gets the focus
   }
 
   /* ---------- people you look after ---------- */
@@ -1567,13 +1738,13 @@
     if (!b || b.type === 'submit') return;
     const d = b.dataset;
 
-    if (b.id === 'pauseBtn') {
-      act(b, async () => {
-        await api.post('/pauses');
-        await refreshPause();
-        const status = $('.pause-headline');
-        if (status) status.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
+    if (b.id === 'installBtn') {
+      const promptEvent = installPrompt;
+      installPrompt = null;
+      promptEvent.prompt();
+      promptEvent.userChoice.finally(drawInstallZone);
+    } else if (b.id === 'pauseBtn') {
+      startLaunch(); // 5 seconds to cancel a stray tap; sends by itself after that
     } else if (d.jump) {
       const target = document.getElementById(d.jump);
       target.scrollIntoView({ behavior: 'smooth' });
@@ -1655,7 +1826,11 @@
 
   function onPauseChange(e) {
     const el = e.target;
-    if (el.id === 'pauseCaller') {
+    if (el.id === 'homePause') {
+      prefs.homePause = el.checked;
+      savePrefs();
+      toast(el.checked ? 'Opening from the home screen will start Pause, with 5 seconds to cancel.' : 'Opening from the home screen will show the Pause button, ready to tap.');
+    } else if (el.id === 'pauseCaller') {
       act(null, () => api.post(pausePath(el.dataset.id, 'details'), { caller: el.value || null }));
     } else if (el.id === 'estateTown') {
       const hint = $('#estateSuggest');
@@ -3051,9 +3226,29 @@
       }
     } catch (e) { /* the router shows a helpful error if the server is down */ }
     connectEvents();
-    if (!location.hash) location.replace('#/home');
+    routeLaunch();
     router();
     checkPendingDrills();
+    if ('serviceWorker' in navigator && window.isSecureContext) {
+      navigator.serviceWorker.register('/sw.js').catch(() => { /* the site still works without it */ });
+    }
+  }
+
+  /* Opened from the home-screen icon (?launch=home), its "Pause now" shortcut (?launch=pause),
+     or as an installed app that ignores start_url: go straight to the Pause countdown. */
+  function routeLaunch() {
+    const launchParam = new URLSearchParams(location.search).get('launch');
+    let fresh = false;
+    try {
+      fresh = !sessionStorage.getItem('kampungwatch.launched');
+      sessionStorage.setItem('kampungwatch.launched', '1');
+    } catch (e) { fresh = !!launchParam; }
+    const fromHome = launchParam === 'pause' || launchParam === 'home' || (isStandalone() && fresh);
+    // From the home screen: the Pause button, ready to tap (or the countdown, in emergency-button mode).
+    const hash = fromHome ? (launchParam === 'pause' || homePauseOn() ? '#/pause/now' : '#/pause')
+      : location.hash || '#/home';
+    // Drop ?launch=... so a reload doesn't count as another launch.
+    history.replaceState(null, '', location.pathname + hash);
   }
 
   boot();

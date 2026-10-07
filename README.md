@@ -10,6 +10,7 @@ Most anti-scam tools work **before** a scam (education, call filtering) or **aft
 |---|---|---|
 | **Pause** (home page) | Kampung Circle: help *during* a scam | One big button for "someone is pressuring me right now". The resident's **Circle** (family who joined with a 6-letter code) gets a live alert on any page, sees the warning signs the resident taps and who the caller claims to be, and taps *I'm on it* to call. If no one answers within 90 seconds, it **escalates to volunteers** near them. Everyone can message, then close it as *scam stopped*, *false alarm* or *money lost*. The page shows Pauses pressed, scams stopped and the typical time until a person steps in. |
 | **Scam Drills** (on the Pause page) | Practising the habit | Circle members send a **safe practice scam** (parcel fee SMS, fake police officer, "new number" from family and more). It pops up like a real message: pressing Pause or deleting it passes; tapping the link shows a 30-second lesson. The Circle sees the result. Volunteers turn a **verified Scam Radar wave into this week's drill for a whole town** with one button, and see pass rates by town. |
+| **Home-screen app** | One tap during a scam | The site installs on phones like an app (its own chili-red icon, no browser bar). The icon opens on the big **Pause** button, so help is two taps away, and the rest of the app works as normal. Pressing Pause starts a **5-second countdown** (*Send now* or *Cancel*); it sends by itself if nothing is tapped. **Emergency-button mode** (a setting on the Pause page, off by default) makes opening the app start the countdown straight away, for a phone used only for emergencies. Android also gets a long-press **Pause now** shortcut. Works offline enough to show the helplines. Installing needs an `https://` address (or `localhost`). |
 | **Check a message** | "Ask a Neighbour" live help | One-tap *Is this a scam?*, paste a message or upload a screenshot, get an instant red-flag check, and chat with a volunteer who replies within minutes. Seniors can request a **call back** in their language or tap to call the 1799 helpline. |
 | **Scam Radar** | Neighbourhood Scam Radar | Live map and feed of anonymised scam reports by town. Reports start as *awaiting verification* until CC/RC volunteers verify them, so rumours don't spread. Choose your area to get **alerts** the moment a scam wave is verified there. |
 | **Community** | Reddit-style forum | Post questions with photos, upvote and downvote, threaded replies, topics (Is this a scam? / Scam alert / Tips / Debate / My story), community polls and volunteer-verified verdicts. |
@@ -74,7 +75,7 @@ Express server (server/src)
 - **Shared data:** reports, posts, comments, votes, polls, cases, Circles, Pauses and drills live on the server.
 - **Pause escalation** runs on the server: a timer per open Pause moves it to volunteers if no one in the Circle has responded. Open Pauses are picked up again if the server restarts.
 - **Browser-only data:** course progress, the alert area and the text-size setting stay in the browser's `localStorage`.
-- **Live updates** use Server-Sent Events. When a volunteer verifies a report, every resident subscribed to that town gets an alert. Case replies and new comments also appear without refreshing.
+- **Live updates** use Server-Sent Events. Some networks and free tunnels (like Cloudflare's `trycloudflare.com`) hold that stream back, so if nothing arrives within 5 seconds the browser switches to polling `GET /api/events/poll` every 3 seconds, with the same privacy rules. When a volunteer verifies a report, every resident subscribed to that town gets an alert. Case replies and new comments also appear without refreshing.
 - **One source of truth:** the server loads `js/data.js` for towns, scam types, red-flag rules and seed content, so the frontend and backend never disagree.
 
 ### Identity (prototype level)
@@ -93,6 +94,7 @@ All endpoints are under `/api` and use JSON. Send `X-Client-Id` on every request
 | `GET /health`, `GET /config`, `GET /me`, `GET /stats` | Server status, settings, your handle, home-page numbers |
 | `POST /volunteer/login` · `DELETE /volunteer/session` | Volunteer sign-in and sign-out |
 | `GET /events` | Live updates stream (`report`, `case`, `post`, `pause`, `drill`, `circle` events) |
+| `GET /events/poll?after=` | The same updates by polling (no `after`: just the latest event id) |
 | `GET /reports?town=&type=&status=&days=` · `GET /reports/:id` | Scam Radar feed |
 | `POST /reports` | Report a scam (starts as `pending`) |
 | `POST /reports/:id/confirm` | Toggle "I got this too" |
@@ -135,6 +137,9 @@ All endpoints are under `/api` and use JSON. Send `X-Client-Id` on every request
 
 ```
 index.html            page shell, header, footer
+manifest.webmanifest  makes the site installable: name, icons, start page, "Pause now" shortcut
+sw.js                 service worker: install support and an offline fallback (never caches the API)
+icons/                home-screen icons, drawn by server/scripts/make-icons.js
 css/styles.css        all styling
 js/data.js            towns, courses, red-flag rules, demo seed content (shared with the server)
 js/app.js             frontend: routing, views, API calls, live updates

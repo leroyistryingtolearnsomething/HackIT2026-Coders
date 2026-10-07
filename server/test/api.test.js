@@ -213,3 +213,49 @@ test('cases: a call-back request needs no message, but an empty case is refused'
   assert.equal(c.data.callback.lang, 'Bahasa Melayu');
   assert.equal(c.data.text, '');
 });
+
+test('installable app: manifest, icons and service worker are served', async () => {
+  const root = base.replace(/\/api$/, '');
+  const manifest = await fetch(root + '/manifest.webmanifest');
+  assert.equal(manifest.status, 200);
+  assert.match(manifest.headers.get('content-type'), /application\/manifest\+json/);
+  const m = await manifest.json();
+  assert.equal(m.display, 'standalone');
+  assert.match(m.start_url, /launch=home/);
+  for (const icon of m.icons) {
+    const res = await fetch(root + icon.src);
+    assert.equal(res.status, 200, icon.src);
+    assert.match(res.headers.get('content-type'), /image\/png/);
+  }
+  const sw = await fetch(root + '/sw.js');
+  assert.equal(sw.status, 200);
+  assert.match(sw.headers.get('content-type'), /javascript/);
+  assert.equal(sw.headers.get('cache-control'), 'no-cache');
+  for (const p of ['/apple-touch-icon.png', '/apple-touch-icon-precomposed.png', '/favicon.ico']) {
+    const res = await fetch(root + p);
+    assert.equal(res.status, 200, p);
+    assert.match(res.headers.get('content-type'), /image\/png/);
+  }
+  // The start URL with ?launch=… still loads the site.
+  assert.equal((await fetch(root + '/?launch=home')).status, 200);
+});
+
+test('live events can also be polled, with the same privacy rules', async () => {
+  const start = await call('GET', '/events/poll');
+  assert.equal(start.data.events.length, 0);
+  const from = start.data.last;
+
+  // Public: a new report reaches everyone.
+  await call('POST', '/reports', { client: OTHER, body: { town: 'Yishun', type: 'Other', channel: 'SMS', title: 'Poll test' } });
+  // Private: a case event only reaches its owner (and volunteers).
+  await call('POST', '/cases', { client: OTHER, body: { channel: 'SMS', text: 'private poll test' } });
+
+  const mine = await call('GET', `/events/poll?after=${from}`);
+  assert.ok(mine.data.events.some(e => e.event === 'report'));
+  assert.ok(!mine.data.events.some(e => e.event === 'case'), 'another resident’s case is not visible');
+
+  const theirs = await call('GET', `/events/poll?after=${from}`, { client: OTHER });
+  assert.ok(theirs.data.events.some(e => e.event === 'case'));
+  assert.ok(theirs.data.last > from);
+  assert.ok(theirs.data.events.every(e => e.id > from));
+});
