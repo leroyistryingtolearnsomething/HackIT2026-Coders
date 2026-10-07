@@ -1,0 +1,12 @@
+{
+  "name": "kampung-watch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kampung Watch — run these from the project root; they forward to server/",
+  "scripts": {
+    "postinstall": "npm --prefix server install",
+    "start": "npm --prefix server start",
+    "dev": "npm --prefix server run dev",
+    "test": "npm --prefix server test"
+  }
+}

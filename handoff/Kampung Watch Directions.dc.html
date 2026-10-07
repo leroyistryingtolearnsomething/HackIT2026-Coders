@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="stylesheet" href="_ds/broadsheet-d54dd915-6f97-48e1-95d7-02ea80b887b9/styles.css">
+  <script src="_ds/broadsheet-d54dd915-6f97-48e1-95d7-02ea80b887b9/_ds_bundle.js"></script>
+  <style>body{margin:0;text-wrap:pretty;background:var(--color-bg);} a{color:var(--color-accent-700);} a:hover{color:var(--color-accent-900);}</style>
+</helmet>
+<section data-screen-label="Turn 1" style="padding:64px;display:flex;flex-direction:column;gap:40px;">
+  <div style="display:flex;flex-direction:column;gap:8px;max-width:72ch;">
+    <span style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);">Turn 1 · Three directions for Kampung Watch</span>
+    <p style="margin:0;font-size:17px;line-height:28px;">How might residents identify, discuss and respond to scams in real time? Each direction leads with a different answer: <a href="#1a">1a</a> the community front page, <a href="#1b">1b</a> check-first for the moment of doubt, <a href="#1c">1c</a> your town's radar bulletin. The checkers are live — paste any message.</p>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:64px;align-items:flex-start;">
+
+    <!-- 1a FRONT PAGE -->
+    <div id="1a" data-screen-label="1a Front page" style="width:1200px;flex:none;display:flex;flex-direction:column;gap:16px;">
+      <div style="display:flex;gap:12px;align-items:baseline;"><span class="tag tag-accent">1a</span><span style="font-size:17px;">The Front Page — every feature as a section of the paper</span></div>
+      <div style="background:var(--color-bg);box-shadow:var(--shadow-md);">
+        <nav class="nav" style="padding-inline:72px;">
+          <span class="nav-brand">Kampung Watch</span>
+          <a href="#1a" aria-current="location">Ask a neighbour</a><a href="#1a">Scam Radar</a><a href="#1a">Community</a><a href="#1a">Learn</a>
+          <button type="button" class="btn btn-primary">Is this a scam?</button>
+        </nav>
+        <div style="padding:0 72px;">
+          <section style="padding:112px 0 72px;display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:72px;align-items:start;">
+            <div>
+              <h1 style="font-family:var(--font-heading);font-weight:var(--font-heading-weight);font-size:72px;line-height:78px;letter-spacing:-0.02em;margin:0 0 0 -0.035em;"><span style="display:block;">Not sure?</span><span style="display:block;">Ask the kampung.</span></h1>
+              <p style="font-size:17px;line-height:28px;max-width:52ch;margin:36px 0 0;">Paste the message, the link or the caller's story. We'll point out the red flags in seconds — and a volunteer from your neighbourhood will reply within minutes.</p>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:16px;padding-top:8px;">
+              <div class="field"><label for="ta-a">The message you received</label>
+                <textarea id="ta-a" class="input" rows="5" style="resize:vertical;font:inherit;" value="{{ textA }}" onChange="{{ onTextA }}" placeholder="Paste it here"></textarea></div>
+              <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <button type="button" class="btn btn-primary">Ask a volunteer</button>
+                <button type="button" class="btn btn-ghost">Call 1799</button>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <span style="font-family:var(--font-heading);font-size:20px;line-height:28px;">{{ verdictA }}</span>
+                <sc-for list="{{ flagsA }}" as="f" hint-placeholder-count="3">
+                  <span style="font-size:15.5px;line-height:24px;color:color-mix(in srgb,var(--color-text) 78%,transparent);">— {{ f.label }}</span>
+                </sc-for>
+              </div>
+            </div>
+          </section>
+          <section style="padding:24px 0 56px;">
+            <hr style="height:5px;border:0;margin:0;border-top:2px solid var(--color-text);border-bottom:1px solid var(--color-text);">
+            <p style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px 28px;margin:0;padding:14px 0;font-size:13px;line-height:14px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);"><span>Tuesday, 6 October 2026</span><span>Edition: {{ town }}</span><span>Verified by CC &amp; RC volunteers</span><span>Helpline 1799, 24/7</span></p>
+            <hr style="height:0;border:0;border-top:1px solid var(--color-text);margin:0;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 70px;padding:14px 0 28px;">
+              <sc-for list="{{ alerts }}" as="al" hint-placeholder-count="4">
+                <p style="display:flex;align-items:baseline;gap:8px;margin:0;font-size:15.5px;line-height:28px;"><span>{{ al.title }}</span><span style="flex:1;min-width:28px;align-self:flex-end;margin-bottom:.34em;border-bottom:1px dotted color-mix(in srgb,var(--color-text) 45%,transparent);"></span><span style="font-family:var(--font-heading);font-size:17px;color:var(--color-accent-700);">{{ al.count }} reports</span></p>
+              </sc-for>
+            </div>
+            <hr style="height:0;border:0;border-top:1px solid var(--color-text);margin:0;">
+          </section>
+          <section style="padding:56px 0 112px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:56px;">
+            <div style="display:flex;flex-direction:column;gap:14px;">
+              <span style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);">Community</span>
+              <h2 style="font-family:var(--font-heading);font-weight:var(--font-heading-weight);font-size:24px;line-height:28px;margin:0;">"Caller said he's from MOM and my work pass is cancelled"</h2>
+              <p style="font-size:15.5px;line-height:28px;margin:0;color:color-mix(in srgb,var(--color-text) 78%,transparent);text-align:justify;hyphens:auto;">Thirty-one neighbours replied. Uncle Tan, CC Scam-Buster, marked it a scam: MOM never calls to cancel passes or asks for a transfer.</p>
+              <span style="display:flex;gap:8px;"><span class="tag tag-accent-2">Verified scam</span><span class="tag tag-neutral">Is this a scam?</span></span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px;">
+              <span style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);">Ask a neighbour</span>
+              <h2 style="font-family:var(--font-heading);font-weight:var(--font-heading-weight);font-size:24px;line-height:28px;margin:0;">Prefer a voice? We'll call you back</h2>
+              <p style="font-size:15.5px;line-height:28px;margin:0;color:color-mix(in srgb,var(--color-text) 78%,transparent);text-align:justify;hyphens:auto;">Choose English, 华语, Melayu or தமிழ். Six volunteers are on duty in your area this evening, including Aunty Mei Ling at Tampines CC.</p>
+              <span><button type="button" class="btn btn-secondary">Request a call back</button></span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px;">
+              <span style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);">Learn</span>
+              <h2 style="font-family:var(--font-heading);font-weight:var(--font-heading-weight);font-size:24px;line-height:28px;margin:0;">Ten minutes to spot a phishing SMS</h2>
+              <p style="font-size:15.5px;line-height:28px;margin:0;color:color-mix(in srgb,var(--color-text) 78%,transparent);text-align:justify;hyphens:auto;">Six short courses with quizzes and a Spot-the-scam game. Start with fake delivery messages, the most reported scam this month.</p>
+              <span><button type="button" class="btn btn-ghost">Start the course</button></span>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1b CHECK FIRST -->
+    <div id="1b" data-screen-label="1b Check first" style="width:1200px;flex:none;display:flex;flex-direction:column;gap:16px;">
+      <div style="display:flex;gap:12px;align-items:baseline;"><span class="tag tag-accent">1b</span><span style="font-size:17px;">Check First — one question, big type, built for the moment of doubt</span></div>
+      <div style="background:var(--color-bg);box-shadow:var(--shadow-md);">
+        <nav class="nav" style="padding-inline:72px;">
+          <span class="nav-brand">Kampung Watch</span>
+          <div class="seg" role="radiogroup" aria-label="Language">
+            <label class="seg-opt"><input type="radio" name="lang-b" checked="">EN</label>
+            <label class="seg-opt"><input type="radio" name="lang-b">华语</label>
+            <label class="seg-opt"><input type="radio" name="lang-b">Melayu</label>
+            <label class="seg-opt"><input type="radio" name="lang-b">தமிழ்</label>
+          </div>
+          <button type="button" class="btn btn-ghost">Text size A+</button>
+        </nav>
+        <div style="padding:96px 72px 112px;display:flex;flex-direction:column;gap:48px;">
+          <h1 style="font-family:var(--font-heading);font-weight:var(--font-heading-weight);font-size:64px;line-height:70px;letter-spacing:-0.02em;margin:0 0 0 -0.035em;max-width:16ch;">Got a message that feels off?</h1>
+          <div style="display:grid;grid-template-columns:minmax(0,6fr) minmax(0,5fr);gap:72px;align-items:start;">
+            <div style="display:flex;flex-direction:column;gap:20px;">
+              <div class="field"><label for="ta-b" style="font-size:19px;">Paste it, or upload a screenshot</label>
+                <textarea id="ta-b" class="input" rows="7" style="resize:vertical;font:inherit;font-size:20px;line-height:30px;padding:16px;" value="{{ textB }}" onChange="{{ onTextB }}" placeholder="Paste the message here"></textarea></div>
+              <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <button type="button" class="btn btn-primary" style="min-height:52px;font-size:18px;padding-inline:24px;">Ask a volunteer now</button>
+                <button type="button" class="btn btn-secondary" style="min-height:52px;font-size:18px;padding-inline:24px;">Upload screenshot</button>
+              </div>
+              <p style="margin:0;font-size:17px;line-height:28px;color:color-mix(in srgb,var(--color-text) 78%,transparent);">Money leaving your account right now? Call <strong>999</strong>. For advice, the ScamShield Helpline <strong>1799</strong> is open all day.</p>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:24px;">
+              <span style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);">What we noticed</span>
+              <span style="font-family:var(--font-heading);font-size:32px;line-height:40px;color:var(--color-accent-2-700);">{{ verdictB }}</span>
+              <ol style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:20px;">
+                <sc-for list="{{ flagsB }}" as="f" hint-placeholder-count="3">
+                  <li style="display:grid;grid-template-columns:40px 1fr;gap:4px 12px;">
+                    <span style="font-family:var(--font-heading);font-size:28px;line-height:30px;color:var(--color-accent-2-700);grid-row:span 2;">{{ f.n }}</span>
+                    <span style="font-size:20px;line-height:28px;font-weight:600;">{{ f.label }}</span>
+                    <span style="font-size:17px;line-height:26px;color:color-mix(in srgb,var(--color-text) 78%,transparent);">{{ f.tip }}</span>
+                  </li>
+                </sc-for>
+              </ol>
+              <p style="margin:0;font-size:15.5px;line-height:26px;font-style:italic;color:color-mix(in srgb,var(--color-text) 70%,transparent);">This is a pause, not a verdict. A neighbour checks every case by hand.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1c RADAR BULLETIN -->
+    <div id="1c" data-screen-label="1c Radar bulletin" style="width:1200px;flex:none;display:flex;flex-direction:column;gap:16px;">
+      <div style="display:flex;gap:12px;align-items:baseline;"><span class="tag tag-accent">1c</span><span style="font-size:17px;">The Radar Bulletin — what's hitting your town, verified, as it happens</span></div>
+      <div style="background:var(--color-bg);box-shadow:var(--shadow-md);">
+        <nav class="nav" style="padding-inline:72px;">
+          <span class="nav-brand">Kampung Watch</span>
+          <a href="#1c" aria-current="location">Radar</a><a href="#1c">Discuss</a><a href="#1c">Ask</a><a href="#1c">Learn</a>
+          <button type="button" class="btn btn-primary">Report a scam</button>
+        </nav>
+        <div style="padding:96px 72px 112px;display:flex;flex-direction:column;gap:72px;">
+          <div style="display:grid;grid-template-columns:minmax(0,7fr) minmax(0,4fr);gap:72px;align-items:end;">
+            <div>
+              <span style="display:block;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);margin-bottom:20px;">Live · updated 2 minutes ago</span>
+              <h1 style="font-family:var(--font-heading);font-weight:var(--font-heading-weight);font-size:68px;line-height:74px;letter-spacing:-0.02em;margin:0 0 0 -0.035em;"><span style="display:block;">{{ town }}, this week:</span><span style="display:block;">fake parcel fees.</span></h1>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px;">
+              <p style="margin:0;font-size:17px;line-height:28px;">Get an alert the moment volunteers verify a new scam wave in your town.</p>
+              <div style="display:flex;gap:12px;"><input class="input" style="flex:1;" placeholder="Your town" aria-label="Your town" value="{{ town }}" readonly=""><button type="button" class="btn btn-primary">Alert me</button></div>
+            </div>
+          </div>
+          <table class="table" style="width:100%;">
+            <thead><tr><th style="text-align:left;">Scam</th><th style="text-align:left;">Channel</th><th style="text-align:left;">Status</th><th style="text-align:right;">Neighbours hit</th><th></th></tr></thead>
+            <tbody>
+              <sc-for list="{{ radar }}" as="r" hint-placeholder-count="5">
+                <tr>
+                  <td><span style="display:flex;flex-direction:column;"><span style="font-family:var(--font-heading);font-size:19px;line-height:28px;">{{ r.title }}</span><span style="font-size:14px;color:color-mix(in srgb,var(--color-text) 70%,transparent);">{{ r.detail }}</span></span></td>
+                  <td>{{ r.channel }}</td>
+                  <td><sc-if value="{{ r.verified }}" hint-placeholder-val="{{ true }}"><span class="tag tag-accent-2">Verified</span></sc-if><sc-if value="{{ r.pending }}" hint-placeholder-val="{{ false }}"><span class="tag tag-outline">Awaiting check</span></sc-if></td>
+                  <td style="text-align:right;font-family:var(--font-heading);font-size:20px;">{{ r.count }}</td>
+                  <td style="text-align:right;"><button type="button" class="btn btn-ghost">I got this too</button></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          <div style="display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:72px;">
+            <div style="display:flex;flex-direction:column;gap:14px;">
+              <span style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);">Why some say "awaiting check"</span>
+              <p style="margin:0;font-size:15.5px;line-height:28px;color:color-mix(in srgb,var(--color-text) 78%,transparent);text-align:justify;hyphens:auto;">Every report stays quiet until a CC or RC volunteer confirms it, so a rumour can't travel faster than the truth. Phone numbers and NRICs are masked before anything is shown.</p>
+            </div>
+            <figure style="margin:0;display:flex;flex-direction:column;gap:20px;">
+              <blockquote style="margin:0;font-family:var(--font-heading);font-style:italic;font-weight:400;font-size:28px;line-height:40px;text-indent:-0.475em;">"Same SingPost SMS reached three aunties at my block. Pinned it in the lift lobby chat too."</blockquote>
+              <figcaption style="font-size:15.5px;color:color-mix(in srgb,var(--color-text) 70%,transparent);">— Hafiz, RC Volunteer · 14 replies in Discuss</figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;town&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Tampines&quot;,&quot;Ang Mo Kio&quot;,&quot;Woodlands&quot;,&quot;Clementi&quot;,&quot;Punggol&quot;,&quot;Bedok&quot;],&quot;default&quot;:&quot;Tampines&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const RULES = [
+  { label: 'Rushes you or uses threats', tip: 'Scammers create panic so you act before thinking.', re: /\b(urgent(ly)?|immediately|within \d+ ?(hours?|hrs?|mins?|minutes|days?)|suspend(ed)?|frozen|final (notice|reminder|warning)|act now|expir(e|es|ed|ing)|blocked|arrest(ed)?|warrant|legal action|last chance)\b/i },
+  { label: 'Contains a link', tip: 'Don’t tap it. Type the official website yourself.', re: /(https?:\/\/|www\.|bit\.ly|tinyurl|\b[a-z0-9-]+\.(xyz|top|click|info|cc|link|site|online|vip)\b)/i },
+  { label: 'Asks for OTP, password or Singpass', tip: 'Banks and agencies never ask for these.', re: /\b(otp|one[- ]time password|pin|password|singpass|log ?in|verify your (account|identity|details)|card (number|details)|cvv)\b/i },
+  { label: 'Asks you to pay or transfer money', tip: 'Be very careful with any request to send money or buy gift cards.', re: /\b(transfer|pay(ment)?|fee|deposit|gift ?cards?|top[- ]?up|bitcoin|crypto|usdt|paynow|bank account|safe account)\b/i },
+  { label: 'Claims to be an authority or big company', tip: 'Hang up and call the official number yourself.', re: /\b(police|spf|mom|moh|ica|iras|cpf|court|customs|singpost|courier|dhl|bank|government|ministry|officer)\b/i },
+  { label: 'Sounds too good to be true', tip: 'Prizes you never entered are classic bait.', re: /\b(won|winner|prize|lucky draw|free gift|guaranteed|high returns?|commission|cashback)\b/i },
+  { label: 'Easy job or task offer', tip: 'Real jobs don’t pay you to like videos.', re: /\b(part[- ]time|work from home|like (videos|posts)|simple tasks?|daily pay|no experience)\b/i },
+  { label: 'Asks you to keep it secret', tip: 'Being told not to tell family is a big warning sign.', re: /\b(don'?t tell|do not tell|keep (this|it) (secret|confidential|private)|confidential)\b/i },
+  { label: 'Unknown contact claiming to know you', tip: 'Call them on their old number to check.', re: /\b(guess who|new number|changed my (number|phone)|this is my new|hi mum|hi dad)\b/i }
+];
+const SAMPLE = 'SingPost: Your parcel is on hold. Pay $1.80 redelivery fee within 24 hours or it will be returned: singpost-redeliver.top/sg';
+function check(t) {
+  const flags = RULES.filter(r => r.re.test(t || '')).map((r, i) => ({ n: i + 1, label: r.label, tip: r.tip }));
+  const v = !t || !t.trim() ? 'Paste a message to check it.' : flags.length === 0 ? 'No obvious red flags. Still unsure? Ask a neighbour.' : flags.length === 1 ? '1 red flag. Pause before you reply.' : `${flags.length} red flags. Don't tap, don't pay.`;
+  return { flags, v };
+}
+class Component extends DCLogic {
+  state = { textA: SAMPLE, textB: SAMPLE };
+  renderVals() {
+    const a = check(this.state.textA), b = check(this.state.textB);
+    const town = this.props.town ?? 'Tampines';
+    return {
+      town,
+      textA: this.state.textA, textB: this.state.textB,
+      onTextA: e => this.setState({ textA: e.target.value }),
+      onTextB: e => this.setState({ textB: e.target.value }),
+      flagsA: a.flags, verdictA: a.v, flagsB: b.flags, verdictB: b.v,
+      alerts: [
+        { title: 'Fake SingPost redelivery SMS', count: 42 },
+        { title: '"MOM officer" work-pass calls', count: 17 },
+        { title: 'Like-videos-for-cash job offers', count: 23 },
+        { title: '"Hi Mum, new number" WhatsApps', count: 9 }
+      ],
+      radar: [
+        { title: 'Fake SingPost redelivery fee', detail: '$1.80 fee, link ending .top', channel: 'SMS', verified: true, pending: false, count: 42 },
+        { title: 'Like-videos-for-cash job', detail: 'Telegram group, asks for a "deposit"', channel: 'WhatsApp / Telegram', verified: true, pending: false, count: 23 },
+        { title: '"MOM officer" call', detail: 'Says your pass is cancelled', channel: 'Phone call', verified: true, pending: false, count: 17 },
+        { title: 'Bank "account frozen" email', detail: 'Asks you to log in to unfreeze', channel: 'Email', verified: false, pending: true, count: 6 },
+        { title: 'Carousell concert tickets', detail: 'PayNow first, no meet-up', channel: 'Social media', verified: false, pending: true, count: 3 }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
