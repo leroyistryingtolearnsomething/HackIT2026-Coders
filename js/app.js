@@ -66,6 +66,9 @@
   }
 
   const isVolunteer = () => !!prefs.volunteer;
+  const myCircle = () => (cache.circle && cache.circle.mine) || null;
+  const userName = () => (prefs.volunteer && prefs.volunteer.name) || (myCircle() && myCircle().name) || null;
+  const userTown = () => (prefs.volunteer && prefs.volunteer.area) || (myCircle() && myCircle().town) || prefs.subscription.town || null;
 
   /* ---------- API client ---------- */
   class ApiError extends Error {}
@@ -111,7 +114,7 @@
   }
 
   /* In-memory copies of server data for the current views. */
-  const cache = { me: null, config: null, reports: [], cases: [], posts: [], post: null };
+  const cache = { me: null, config: null, circle: null, reports: [], cases: [], posts: [], post: null };
 
   /* ---------- UI primitives ---------- */
   function toast(msg, type = 'info', { link, linkText } = {}) {
@@ -159,6 +162,11 @@
     onModalClose = null;
     if (cb && !silent) cb();
     if (lastFocus && lastFocus.isConnected) lastFocus.focus();
+    if (queuedDrill) {
+      const d = queuedDrill;
+      queuedDrill = null;
+      setTimeout(() => openDrill(d), 1000);
+    }
   }
 
   document.addEventListener('keydown', e => {
@@ -274,6 +282,9 @@
     const header = $('.site-header');
     header.lang = prefs.lang;
     $$('[data-i18n]', header).forEach(el => { el.textContent = say(el.dataset.i18n); });
+    $$('[data-i18n-label]', header).forEach(el => { el.setAttribute('aria-label', say(el.dataset.i18nLabel)); });
+    const town = userTown();
+    $('#navTown').textContent = town ? ` · ${town}` : '';
     $('#volunteerBtn').textContent = say(isVolunteer() ? 'signOut' : 'volunteer');
     $('#langSelect').value = prefs.lang;
     paintAssistant();
@@ -528,14 +539,21 @@
       navPause: 'Pause', navCheck: 'Check a message',
       navRadar: 'Scam Radar', navCommunity: 'Community', navLearn: 'Learn',
       langLabel: 'Language', textSize: 'Text size A+', volunteer: 'Volunteer sign in', signOut: 'Volunteer sign out',
-      headline: 'Got a message that feels off?',
+      headline: 'Got a message that feels off? Ask the kampung.',
+      onDuty: 'Neighbours on duty tonight',
+      callMeBack: 'Call me back',
+      dutyNone: town => `No volunteers listed for ${town} yet. Ask anyway: volunteers across Singapore answer.`,
+      block: 'Going round your block this week',
+      blockAll: 'Going round Singapore this week',
+      blockNone: town => `Nothing verified in ${town} this week.`,
+      hit: n => `${n} neighbours hit`,
       pasteLabel: 'Paste it, or upload a screenshot',
       placeholder: 'Paste the message here',
-      send: 'Ask a volunteer now',
+      send: 'Ask a neighbour now',
       upload: 'Upload screenshot',
       remove: 'Remove screenshot',
       shotAlt: 'Your screenshot',
-      help: 'Money leaving your account right now? Call {999}. For advice, the ScamShield Helpline {1799} is open all day.',
+      help: 'Money leaving your account now? Call {999}. For advice, ScamShield {1799}, any time.',
       noticed: 'What we noticed',
       vEmpty: 'Paste a message to check it.',
       vNone: 'No obvious red flags. Still unsure? Ask a neighbour.',
@@ -585,14 +603,21 @@
       navPause: '暂停求助', navCheck: '检查信息',
       navRadar: '诈骗雷达', navCommunity: '社区', navLearn: '学习',
       langLabel: '语言', textSize: '字体大小 A+', volunteer: '义工登录', signOut: '义工退出',
-      headline: '收到一条感觉不对劲的信息？',
+      headline: '收到一条感觉不对劲的信息？问问甘榜邻居。',
+      onDuty: '今晚值班的邻居',
+      callMeBack: '请给我回电',
+      dutyNone: town => `${town}暂时没有登记的义工。照样可以提问，全新加坡的义工都会回答。`,
+      block: '本周在您附近流传的骗局',
+      blockAll: '本周在新加坡流传的骗局',
+      blockNone: town => `本周${town}没有经核实的骗局。`,
+      hit: n => `${n} 位邻居遇到`,
       pasteLabel: '把信息贴在这里，或上传截图',
       placeholder: '在这里粘贴信息',
-      send: '马上请义工帮忙看看',
+      send: '马上问问邻居',
       upload: '上传截图',
       remove: '移除截图',
       shotAlt: '您的截图',
-      help: '钱正在从您的户口被转走？请拨打 {999}。如需咨询，ScamShield 热线 {1799} 全天开放。',
+      help: '钱正在从您的户口被转走？请拨打 {999}。如需咨询，可随时拨打 ScamShield {1799}。',
       noticed: '我们发现了什么',
       vEmpty: '贴上信息，我们帮您检查。',
       vNone: '没有明显的危险信号。还是不放心？问问邻居吧。',
@@ -642,14 +667,21 @@
       navPause: 'Jeda', navCheck: 'Semak mesej',
       navRadar: 'Radar Penipuan', navCommunity: 'Komuniti', navLearn: 'Belajar',
       langLabel: 'Bahasa', textSize: 'Saiz teks A+', volunteer: 'Log masuk sukarelawan', signOut: 'Log keluar sukarelawan',
-      headline: 'Dapat mesej yang rasa tak kena?',
+      headline: 'Dapat mesej yang rasa tak kena? Tanya orang kampung.',
+      onDuty: 'Jiran yang bertugas malam ini',
+      callMeBack: 'Telefon saya semula',
+      dutyNone: town => `Belum ada sukarelawan untuk ${town}. Tanya juga: sukarelawan seluruh Singapura akan menjawab.`,
+      block: 'Sedang tersebar di kawasan anda minggu ini',
+      blockAll: 'Sedang tersebar di Singapura minggu ini',
+      blockNone: town => `Tiada penipuan disahkan di ${town} minggu ini.`,
+      hit: n => `${n} jiran terkena`,
       pasteLabel: 'Tampal di sini, atau muat naik tangkapan skrin',
       placeholder: 'Tampal mesej di sini',
-      send: 'Tanya sukarelawan sekarang',
+      send: 'Tanya jiran sekarang',
       upload: 'Muat naik tangkapan skrin',
       remove: 'Buang tangkapan skrin',
       shotAlt: 'Tangkapan skrin anda',
-      help: 'Wang sedang keluar dari akaun anda sekarang? Hubungi {999}. Untuk nasihat, Talian Bantuan ScamShield {1799} dibuka sepanjang hari.',
+      help: 'Wang sedang keluar dari akaun anda? Hubungi {999}. Untuk nasihat, ScamShield {1799}, bila-bila masa.',
       noticed: 'Apa yang kami perasan',
       vEmpty: 'Tampal mesej untuk menyemaknya.',
       vNone: 'Tiada tanda bahaya yang jelas. Masih ragu? Tanya jiran.',
@@ -699,14 +731,21 @@
       navPause: 'நிறுத்து', navCheck: 'செய்தியைச் சரிபார்',
       navRadar: 'மோசடி ரேடார்', navCommunity: 'சமூகம்', navLearn: 'கற்றல்',
       langLabel: 'மொழி', textSize: 'எழுத்து அளவு A+', volunteer: 'தொண்டூழியர் உள்நுழைவு', signOut: 'தொண்டூழியர் வெளியேறு',
-      headline: 'சந்தேகமான செய்தி வந்ததா?',
+      headline: 'சந்தேகமான செய்தி வந்ததா? கம்பத்திடம் கேளுங்கள்.',
+      onDuty: 'இன்றிரவு பணியிலுள்ள அண்டை வீட்டார்',
+      callMeBack: 'என்னைத் திரும்ப அழையுங்கள்',
+      dutyNone: town => `${town} பகுதிக்கு இன்னும் தொண்டூழியர்கள் பதிவு செய்யவில்லை. இருந்தாலும் கேளுங்கள்: சிங்கப்பூர் முழுவதும் உள்ள தொண்டூழியர்கள் பதிலளிப்பார்கள்.`,
+      block: 'இந்த வாரம் உங்கள் பகுதியில் பரவுபவை',
+      blockAll: 'இந்த வாரம் சிங்கப்பூரில் பரவுபவை',
+      blockNone: town => `இந்த வாரம் ${town} பகுதியில் சரிபார்க்கப்பட்ட மோசடி எதுவும் இல்லை.`,
+      hit: n => `${n} அண்டை வீட்டார் பாதிப்பு`,
       pasteLabel: 'அதை இங்கே ஒட்டுங்கள், அல்லது திரைப்பிடிப்பைப் பதிவேற்றுங்கள்',
       placeholder: 'செய்தியை இங்கே ஒட்டுங்கள்',
-      send: 'இப்போதே தொண்டூழியரிடம் கேளுங்கள்',
+      send: 'இப்போதே அண்டை வீட்டாரிடம் கேளுங்கள்',
       upload: 'திரைப்பிடிப்பைப் பதிவேற்று',
       remove: 'திரைப்பிடிப்பை நீக்கு',
       shotAlt: 'உங்கள் திரைப்பிடிப்பு',
-      help: 'உங்கள் கணக்கிலிருந்து இப்போதே பணம் போகிறதா? {999} ஐ அழையுங்கள். ஆலோசனைக்கு, ScamShield உதவி எண் {1799} நாள் முழுவதும் திறந்திருக்கும்.',
+      help: 'உங்கள் கணக்கிலிருந்து இப்போதே பணம் போகிறதா? {999} ஐ அழையுங்கள். ஆலோசனைக்கு, ScamShield {1799}, எந்நேரமும்.',
       noticed: 'நாங்கள் கவனித்தவை',
       vEmpty: 'சரிபார்க்க ஒரு செய்தியை ஒட்டுங்கள்.',
       vNone: 'வெளிப்படையான அபாய அறிகுறிகள் இல்லை. இன்னும் சந்தேகமா? அண்டை வீட்டாரிடம் கேளுங்கள்.',
@@ -733,20 +772,39 @@
     return typeof v === 'function' ? v(...args) : v;
   }
 
+  /* Languages a volunteer can call back in. Must match LANGS in server/src/routes/cases.js. */
+  const CALLBACK_LANGS = ['English', '华语 (Mandarin)', 'Bahasa Melayu', 'தமிழ் (Tamil)', 'Hokkien / Teochew'];
+  const CALLBACK_LANG_FOR = { English: 'English', 华语: '华语 (Mandarin)', Melayu: 'Bahasa Melayu', தமிழ்: 'தமிழ் (Tamil)', Hokkien: 'Hokkien / Teochew' };
+  const CALLBACK_LANG_FOR_UI = { en: 'English', zh: '华语 (Mandarin)', ms: 'Bahasa Melayu', ta: 'தமிழ் (Tamil)' };
+
+  /* Kampung greeting by time of day: pagi (morning), petang (afternoon and early evening), malam (night). */
+  function greeting(name) {
+    const h = new Date().getHours();
+    return `Selamat ${h < 12 ? 'pagi' : h < 19 ? 'petang' : 'malam'}, ${name}.`;
+  }
+
+  const initials = name => name.replace(/^(Aunty|Uncle|Mr|Mrs|Mdm|Ms|Encik|Puan)\s+/i, '')
+    .split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+
   async function renderAsk(seq) {
     const vol = isVolunteer();
+    const town = userTown();
+    let blockReports = null;
 
     main.innerHTML = `
       <div class="check-first">
 
         <div class="cf-body">
-          <h1 class="cf-headline" data-i18n="headline"></h1>
+          <div class="cf-intro">
+            <p class="cf-greeting" id="askGreeting" hidden></p>
+            <h1 class="cf-headline" data-i18n="headline"></h1>
+          </div>
 
           <div class="cf-columns">
             <form class="cf-input" id="askForm" novalidate>
               <div class="field">
                 <label for="askText" data-i18n="pasteLabel"></label>
-                <textarea id="askText" class="input" rows="7" maxlength="4000" data-i18n-placeholder="placeholder"></textarea>
+                <textarea id="askText" class="input" rows="5" maxlength="4000" data-i18n-placeholder="placeholder"></textarea>
               </div>
               <input type="file" id="askImg" class="sr-only" accept="${SCREENSHOT_TYPES.join(',')}" tabindex="-1" aria-hidden="true">
               <div class="cf-actions">
@@ -761,32 +819,41 @@
               <h2 class="cf-kicker" id="askNoticed" data-i18n="noticed"></h2>
               <p class="cf-verdict" id="askVerdict"></p>
               <ol class="cf-flags" id="askFlagList" role="list"></ol>
-              <p class="cf-footnote" data-i18n="footnote"></p>
             </section>
           </div>
 
-          <div class="cf-below">
-            <!-- Read by the form's submit handler (by id), so it can sit outside the form. -->
-            <details class="cf-more" id="callbackBox">
-              <summary data-i18n="more"></summary>
-              <div class="cf-more-body">
-                <div class="field">
-                  <label for="askChannel" data-i18n="channel"></label>
-                  <select id="askChannel" class="input">
-                    ${KW.CHANNELS.map(c => `<option>${esc(c)}</option>`).join('')}
-                  </select>
-                </div>
-                <p class="cf-note" data-i18n="cbIntro"></p>
-                <div class="cf-callback">
-                  <div class="field"><label for="cbName" data-i18n="cbName"></label><input type="text" id="cbName" class="input" maxlength="60" autocomplete="given-name"></div>
-                  <div class="field"><label for="cbPhone" data-i18n="cbPhone"></label><input type="tel" id="cbPhone" class="input" inputmode="tel" maxlength="20" autocomplete="tel" placeholder="8123 4567"></div>
-                  <div class="field"><label for="cbLang" data-i18n="cbLang"></label>
-                    <select id="cbLang" class="input"><option>English</option><option>华语 (Mandarin)</option><option>Bahasa Melayu</option><option>தமிழ் (Tamil)</option><option>Hokkien / Teochew</option></select>
-                  </div>
-                </div>
-                <p class="cf-note" data-i18n="privacy"></p>
+          <!-- Read by the form's submit handler (by id), so it can sit outside the form.
+               "Call me back" next to a neighbour on duty opens it. -->
+          <details class="cf-more" id="callbackBox">
+            <summary data-i18n="more"></summary>
+            <div class="cf-more-body">
+              <div class="field">
+                <label for="askChannel" data-i18n="channel"></label>
+                <select id="askChannel" class="input">
+                  ${KW.CHANNELS.map(c => `<option>${esc(c)}</option>`).join('')}
+                </select>
               </div>
-            </details>
+              <p class="cf-note" data-i18n="cbIntro"></p>
+              <div class="cf-callback">
+                <div class="field"><label for="cbName" data-i18n="cbName"></label><input type="text" id="cbName" class="input" maxlength="60" autocomplete="given-name"></div>
+                <div class="field"><label for="cbPhone" data-i18n="cbPhone"></label><input type="tel" id="cbPhone" class="input" inputmode="tel" maxlength="20" autocomplete="tel" placeholder="8123 4567"></div>
+                <div class="field"><label for="cbLang" data-i18n="cbLang"></label>
+                  <select id="cbLang" class="input">${CALLBACK_LANGS.map(l => `<option>${esc(l)}</option>`).join('')}</select>
+                </div>
+              </div>
+              <p class="cf-note" data-i18n="privacy"></p>
+            </div>
+          </details>
+
+          <div class="cf-neighbours">
+            <section aria-labelledby="dutyTitle">
+              <h2 class="cf-kicker" id="dutyTitle" data-i18n="onDuty"></h2>
+              <ul class="duty-list" id="dutyList" role="list"></ul>
+            </section>
+            <section aria-labelledby="blockTitle">
+              <h2 class="cf-kicker" id="blockTitle"></h2>
+              <ul class="block-list" id="blockList" role="list"></ul>
+            </section>
           </div>
         </div>
 
@@ -830,7 +897,50 @@
       $('#askHelp').innerHTML = esc(say('help')).replace('{999}', call('999')).replace('{1799}', call('1799'));
       const rm = $('#askImgPrev button');
       if (rm) { rm.textContent = say('remove'); $('#askImgPrev img').alt = say('shotAlt'); }
+      const name = userName();
+      $('#askGreeting').hidden = !name;
+      $('#askGreeting').textContent = name ? greeting(name) : '';
+      $('#blockTitle').textContent = town ? say('block') : say('blockAll');
+      drawDuty();
+      drawBlock();
       updateCheck(true);
+    }
+
+    /* Volunteers from the seed data who cover the user's town. */
+    function drawDuty() {
+      const list = $('#dutyList');
+      const onDuty = town ? KW.VOLUNTEERS.filter(v => v.area === town) : KW.VOLUNTEERS.slice(0, 3);
+      if (!onDuty.length) { list.innerHTML = `<li class="cf-note">${esc(say('dutyNone', town))}</li>`; return; }
+      list.innerHTML = onDuty.map((v, i) => `
+        <li class="duty">
+          <span class="duty-avatar" aria-hidden="true">${esc(initials(v.name))}</span>
+          <span class="duty-who"><span class="duty-name">${esc(v.name)}</span><span class="duty-meta">${esc(v.role)} · ${esc(v.langs)}</span></span>
+          <button type="button" class="btn btn-ghost" data-callme="${i}" aria-label="${esc(say('callMeBack'))}: ${esc(v.name)}">${esc(say('callMeBack'))}</button>
+        </li>`).join('');
+      $$('[data-callme]', list).forEach(b => b.addEventListener('click', () => {
+        const v = onDuty[Number(b.dataset.callme)];
+        // Prefer the resident's own language if this volunteer speaks it.
+        const mine = CALLBACK_LANG_FOR_UI[prefs.lang];
+        const spoken = v.langs.split(/,\s*/).map(l => CALLBACK_LANG_FOR[l]).filter(Boolean);
+        $('#cbLang').value = spoken.includes(mine) ? mine : (spoken[0] || 'English');
+        const box = $('#callbackBox');
+        box.open = true;
+        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        $('#cbName').focus({ preventScroll: true });
+      }));
+    }
+
+    /* The top verified scams in the user's town this week, from the Scam Radar. */
+    function drawBlock() {
+      const list = $('#blockList');
+      if (!blockReports) { list.innerHTML = ''; return; }
+      const top = [...blockReports].sort((a, b) => b.count - a.count).slice(0, 4);
+      list.innerHTML = top.length ? top.map(r => `
+        <li class="block-row">
+          <a href="#/radar" class="block-title">${esc(r.title)}</a>
+          <span class="block-leader" aria-hidden="true"></span>
+          <span class="block-count" aria-label="${esc(say('hit', r.count))}">${r.count}</span>
+        </li>`).join('') : `<li class="cf-note">${esc(say('blockNone', town))}</li>`;
     }
 
     paintCopy();
@@ -863,12 +973,13 @@
     $('#askForm').addEventListener('submit', e => {
       e.preventDefault();
       const body = text.value.trim();
-      if (!body && !image) {
+      const wantsCall = $('#callbackBox').open && $('#cbPhone').value.trim();
+      // A call-back request on its own is fine: some residents would rather talk than type.
+      if (!body && !image && !wantsCall) {
         toast(say('needInput'), 'warn');
         text.focus();
         return;
       }
-      const wantsCall = $('#callbackBox').open && $('#cbPhone').value.trim();
       act(e.submitter, async () => {
         const c = await api.post('/cases', {
           channel: $('#askChannel').value,
@@ -888,7 +999,14 @@
       });
     });
 
-    // The check works without the server; only the case list needs it.
+    // The check works without the server; only the case list and the block alerts need it.
+    const q = new URLSearchParams({ status: 'verified', days: 7, limit: 200 });
+    if (town) q.set('town', town);
+    api.get('/reports?' + q).then(reports => {
+      if (stale(seq)) return;
+      blockReports = reports;
+      drawBlock();
+    }).catch(() => {});
     try {
       const cases = await api.get('/cases');
       if (stale(seq)) return;
@@ -942,7 +1060,7 @@
             <span class="muted">${esc(c.channel)} · ${timeAgo(c.created)}</span>
           </header>
           ${vol && c.callback ? `<p class="callback-note">Call <strong>${esc(c.callback.name || 'the resident')}</strong> at <a href="tel:${esc(c.callback.phone.replace(/\s/g, ''))}">${esc(c.callback.phone)}</a> · ${esc(c.callback.lang)}</p>` : ''}
-          <blockquote class="case-quote">${c.text ? nl2br(c.text) : '<em>(screenshot only)</em>'}</blockquote>
+          <blockquote class="case-quote">${c.text ? nl2br(c.text) : c.image ? '<em>(screenshot only)</em>' : '<em>(call-back request)</em>'}</blockquote>
           ${c.image ? `<img class="case-img" src="${esc(c.image)}" alt="Screenshot attached to case">` : ''}
           <div class="thread">
             ${c.messages.map(m => `
@@ -1048,6 +1166,8 @@
       isVolunteer() ? api.get('/drills/stats') : null
     ]);
     Object.assign(pauseState, { circle, pauses, stats, drillStats });
+    cache.circle = circle;
+    paintHeader(); // the header shows the town from the resident's Circle
   }
 
   async function renderPause(seq) {
@@ -1508,7 +1628,8 @@
       act(e.submitter, async () => {
         const res = await api.post('/circles', { name: $('#circleName').value, town: $('#circleTown').value });
         toast(pauseState.circle.mine ? 'Saved.' : 'Your Circle is ready. Now send the code to your family.', 'ok');
-        pauseState.circle = res;
+        pauseState.circle = cache.circle = res;
+        paintHeader();
         await refreshPause();
       });
     } else if (form.id === 'joinForm') {
@@ -1567,9 +1688,10 @@
     if (onPausePage()) {
       // The resident's own taps don't need a redraw (it would move their focus).
       if (!(kind === 'updated' && ownOpen)) refreshPause();
-      if (kind === 'new' && !ownOpen) {
+      if ((kind === 'new' || kind === 'escalated') && !ownOpen) {
         const p = await api.get('/pauses/' + encodeURIComponent(id)).catch(() => null);
-        if (p && p.role !== 'owner') toast(`${p.name} pressed Pause.`, 'warn');
+        if (p && kind === 'new' && p.role === 'circle') toast(`${p.name} pressed Pause.`, 'warn');
+        if (p && kind === 'escalated' && p.role === 'volunteer') toast(`${p.name} needs a volunteer: their Circle didn’t answer in time.`, 'warn');
       }
       return;
     }
@@ -1615,8 +1737,10 @@
     if (pending.length) setTimeout(() => openDrill(pending[0]), 2500);
   }
 
+  let queuedDrill = null;
   function openDrill(d) {
-    if (!$('#modal').hidden) return; // don't cover something the resident is already doing
+    // Don't cover something the resident is already doing; show it when they close that.
+    if (!$('#modal').hidden) { queuedDrill = d; return; }
     const m = d.message;
     openModal({
       title: 'New message',
@@ -1780,6 +1904,7 @@
       }
       prefs.subscription = { town, enabled: true };
       savePrefs();
+      paintHeader();
       toast(`Alerts on for ${town}.`, 'ok');
       drawRadarPage();
     });
@@ -1793,7 +1918,7 @@
     }));
     $('#subTown').addEventListener('change', e => {
       if (prefs.subscription.enabled && e.target.value) {
-        prefs.subscription.town = e.target.value; savePrefs(); drawRadarPage();
+        prefs.subscription.town = e.target.value; savePrefs(); paintHeader(); drawRadarPage();
       }
     });
 
@@ -2913,9 +3038,11 @@
     try { localStorage.removeItem('kampungwatch.state'); } catch (e) { /* old prototype data */ }
     applySettings();
     try {
-      const [me, config] = await Promise.all([api.get('/me'), api.get('/config')]);
+      const [me, config, circle] = await Promise.all([api.get('/me'), api.get('/config'), api.get('/circles/me')]);
       cache.me = me;
       cache.config = config;
+      cache.circle = circle;
+      paintHeader();
       paintAssistant();
       // The server forgot this volunteer session (expired or server reset).
       if (prefs.volunteer && !me.volunteer) {
