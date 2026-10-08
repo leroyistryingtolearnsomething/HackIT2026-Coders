@@ -259,3 +259,13 @@ test('live events can also be polled, with the same privacy rules', async () => 
   assert.ok(theirs.data.last > from);
   assert.ok(theirs.data.events.every(e => e.id > from));
 });
+
+test('community counts: total and per topic', async () => {
+  const counts = await call('GET', '/posts/counts');
+  assert.equal(counts.status, 200);
+  const all = await call('GET', '/posts?limit=100');
+  assert.equal(counts.data.total, all.data.length);
+  assert.equal(Object.values(counts.data.byFlair).reduce((a, n) => a + n, 0), counts.data.total);
+  const asks = await call('GET', '/posts?flair=ask&limit=100');
+  assert.equal(counts.data.byFlair.ask, asks.data.length);
+});

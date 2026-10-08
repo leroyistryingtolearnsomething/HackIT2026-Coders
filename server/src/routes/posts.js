@@ -27,6 +27,15 @@ export function postsRouter({ db, hub, images }) {
     }));
   });
 
+  /* How many discussions there are, in total and per topic (for the Community sidebar). */
+  r.get('/counts', (req, res) => {
+    const byFlair = Object.fromEntries(FLAIR_IDS.map(f => [f, 0]));
+    for (const row of db.prepare('SELECT flair, COUNT(*) AS n FROM posts GROUP BY flair').all()) {
+      if (row.flair in byFlair) byFlair[row.flair] = row.n;
+    }
+    res.json({ total: Object.values(byFlair).reduce((a, n) => a + n, 0), byFlair });
+  });
+
   r.get('/:id', (req, res) => res.json(load(req)));
 
   r.post('/', requireClient, (req, res) => {

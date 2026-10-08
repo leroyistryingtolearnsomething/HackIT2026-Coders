@@ -239,8 +239,6 @@
     return () => data;
   }
 
-  /* Seed polls were written with emoji; show the words only. */
-  const plainLabel = s => String(s).replace(/^[\p{Extended_Pictographic}️‍\s]+/u, '');
 
   function townOptions(selected = '', includeAll = false, allLabel = 'All areas') {
     return (includeAll ? `<option value="">${allLabel}</option>` : '') +
@@ -2491,67 +2489,76 @@
   const communityView = { flair: 'all', sort: 'hot', q: '' };
   const flairLabel = id => (KW.FLAIRS.find(f => f.id === id) || {}).label || id;
 
+  /* Tag colour for each topic: warnings in chili, tips in pandan, the rest quieter. */
+  const FLAIR_TAG = { ask: 'tag-accent-2', alert: 'tag-accent-2', tips: 'tag-accent', debate: 'tag-neutral', story: 'tag-outline' };
+  // Posts, poll answers and topics are shown without emoji.
+  const noEmoji = s => String(s).replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '').replace(/\s{2,}/g, ' ').trim();
+
+  let postCounts = null;
+
   async function renderCommunity(seq, sub, id) {
     if (sub === 'post' && id) return renderPost(seq, id);
-    await loadPostList(seq);
+    const [, counts] = await Promise.all([loadPostList(seq), api.get('/posts/counts').catch(() => null)]);
     if (stale(seq)) return;
+    postCounts = counts;
 
+    const count = fid => postCounts ? (fid === 'all' ? postCounts.total : postCounts.byFlair[fid] || 0) : '';
     const topic = (fid, label) => `
-      <li><button type="button" class="topic" data-flair="${fid}" aria-pressed="${communityView.flair === fid}">${esc(label)}</button></li>`;
+      <li><button type="button" class="cm-topic" data-flair="${fid}" aria-pressed="${communityView.flair === fid}">
+        <span>${esc(noEmoji(label))}</span><span class="cm-topic-n" aria-label="${count(fid)} posts">${count(fid)}</span>
+      </button></li>`;
 
     main.innerHTML = `
-      <div class="page community">
-        <header class="page-head">
-          <div>
-            <p class="kicker">Community</p>
-            <h1 class="display">Ask, warn and learn from your neighbours.</h1>
-          </div>
-          <div class="head-side">
-            <p class="lede">Questions, screenshots, tips and debate. Answers marked Volunteer come from trained Digital Ambassadors and RC volunteers.</p>
-            <div class="btn-row"><button type="button" class="btn btn-primary btn-lg" id="newPostBtn">Start a post</button></div>
+      <div class="community">
+        <header class="cm-head">
+          <div class="cm-head-inner">
+            <div class="cm-head-text">
+              <p class="cm-eyebrow">Kopitiam talk${postCounts ? ` · ${postCounts.total} discussion${postCounts.total === 1 ? '' : 's'}` : ''}</p>
+              <h1 class="cm-title">Community</h1>
+              <p class="cm-desc">Ask about a strange message, warn your block, and learn from neighbours. Volunteer answers are marked.</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-lg cm-new" id="newPostBtn">New post</button>
           </div>
         </header>
 
-        <div class="community-layout">
-          <section class="feed-col" aria-label="Posts">
-            <div class="feed-toolbar">
+        <div class="cm-body">
+          <nav class="cm-topics" aria-labelledby="topicsTitle">
+            <h2 class="kicker" id="topicsTitle">Topics</h2>
+            <ul class="cm-topic-list" role="list">
+              ${topic('all', 'All posts')}
+              ${KW.FLAIRS.map(f => topic(f.id, f.label)).join('')}
+            </ul>
+          </nav>
+
+          <section class="cm-feed" aria-label="Posts">
+            <div class="cm-toolbar">
               <div class="seg" role="radiogroup" aria-label="Sort posts">
                 ${[['hot', 'Hot'], ['new', 'New'], ['top', 'Top']].map(([s, label]) => `
                   <label class="seg-opt"><input type="radio" name="postSort" value="${s}" ${communityView.sort === s ? 'checked' : ''}>${label}</label>`).join('')}
               </div>
-              <div class="field search-field">
+              <div class="cm-search">
                 <label for="postSearch" class="sr-only">Search posts</label>
-                <input type="search" id="postSearch" class="input" placeholder="Search posts" value="${esc(communityView.q)}">
+                <input type="search" id="postSearch" placeholder="Search posts" value="${esc(communityView.q)}">
               </div>
             </div>
             <div id="postList"></div>
           </section>
 
-          <aside class="community-side">
-            <nav aria-labelledby="topicsTitle">
-              <h2 class="kicker" id="topicsTitle">Topics</h2>
-              <ul class="topic-list" role="list">
-                ${topic('all', 'All posts')}
-                ${KW.FLAIRS.map(f => topic(f.id, f.label)).join('')}
-              </ul>
-            </nav>
+          <aside class="cm-side">
             <section aria-labelledby="rulesTitle">
-              <h2 class="kicker" id="rulesTitle">House rules</h2>
-              <ol class="flag-list" role="list">
-                <li><span class="flag-n">1</span><span class="flag-label">Hide personal details</span><span class="flag-tip">Phone numbers, NRIC numbers and addresses stay out of posts.</span></li>
-                <li><span class="flag-n">2</span><span class="flag-label">Be kind</span><span class="flag-tip">Anyone can be targeted. Nobody gets scolded here.</span></li>
-                <li><span class="flag-n">3</span><span class="flag-label">No selling, no strange links</span><span class="flag-tip">Posts with unknown links are removed.</span></li>
+              <h2 class="cm-side-title" id="rulesTitle">House rules</h2>
+              <ol class="cm-side-list" role="list">
+                <li><strong>Hide personal details.</strong> Phone numbers, NRIC numbers and addresses stay out of posts.</li>
+                <li><strong>Be kind.</strong> Anyone can be targeted. Nobody gets scolded here.</li>
+                <li><strong>No selling, no strange links.</strong> Posts with unknown links are removed.</li>
+                <li><strong>Need an answer fast?</strong> <a href="#/ask">Ask a volunteer privately</a> instead.</li>
               </ol>
             </section>
-            <section aria-labelledby="fastTitle">
-              <h2 class="kicker" id="fastTitle">Need an answer fast?</h2>
-              <p>Send it privately to a trained volunteer instead.</p>
-              <a class="btn btn-secondary" href="#/ask">Ask a volunteer</a>
-            </section>
             <section aria-labelledby="helpersTitle">
-              <h2 class="kicker" id="helpersTitle">Top helpers this week</h2>
-              <ul class="helper-list" role="list">
-                ${KW.VOLUNTEERS.slice(0, 4).map((v, i) => `<li><span class="helper-name">${esc(v.name)}</span><span class="muted">${esc(v.role)} · ${[48, 35, 29, 21][i]} helpful answers</span></li>`).join('')}
+              <h2 class="cm-side-title" id="helpersTitle">Volunteers answering</h2>
+              <ul class="cm-side-list" role="list">
+                ${KW.VOLUNTEERS.slice(0, 5).map(v => `
+                  <li><span class="cm-helper">${esc(v.name)}</span><span class="cm-helper-meta">${esc(v.role)} · ${esc(v.area)} · ${esc(v.langs)}</span></li>`).join('')}
               </ul>
             </section>
           </aside>
@@ -2595,10 +2602,31 @@
     if (!list) return;
     list.innerHTML = cache.posts.length ? cache.posts.map(postItem).join('')
       : `<div class="empty"><p>No posts here yet. Be the first to start the conversation.</p></div>`;
-    bindVotes(list, (kind, updated) => {
-      upsert(cache.posts, updated);
+    const update = updated => {
+      const i = cache.posts.findIndex(x => x.id === updated.id);
+      if (i >= 0) cache.posts[i] = { ...cache.posts[i], ...updated };
       renderPostList();
-    });
+    };
+    bindVotes(list, (kind, updated) => update(updated));
+    $$('[data-listpoll]', list).forEach(b => b.addEventListener('click', () => act(b, async () => {
+      const p = cache.posts.find(x => x.id === b.dataset.post);
+      const i = Number(b.dataset.listpoll);
+      update(await api.post(`/posts/${encodeURIComponent(p.id)}/poll`, { option: p.poll.myChoice === i ? null : i }));
+    })));
+    $$('[data-share]', list).forEach(b => b.addEventListener('click', () => sharePost(cache.posts.find(x => x.id === b.dataset.share))));
+  }
+
+  /* "Share to my block": the phone's share sheet (WhatsApp, Telegram…), or copy the link. */
+  function sharePost(p) {
+    const url = `${location.origin}/#/community/post/${p.id}`;
+    const title = noEmoji(p.title);
+    if (navigator.share) {
+      navigator.share({ title, text: `Kampung Watch: ${title}`, url }).catch(() => { /* closed the share sheet */ });
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => toast('Link copied. Paste it into your block’s chat group.', 'ok'));
+    } else {
+      toast(url);
+    }
   }
 
   /* Text-only voting: "Upvote · 42 points · Downvote". */
@@ -2625,34 +2653,63 @@
   function verdictTag(p) {
     if (!p.verdict) return '';
     return p.verdict.result === 'scam'
-      ? `<span class="tag tag-accent-2">Volunteer verified: scam</span>`
-      : `<span class="tag tag-accent">Volunteer verified: legit</span>`;
+      ? `<span class="tag tag-accent-2">Verified scam</span>`
+      : `<span class="tag tag-accent">Verified legit</span>`;
   }
 
+  /* Topic tag, "author · role · time", then the volunteer verdict. */
   function postMeta(p) {
     return `
       <p class="post-meta">
-        <span class="tag tag-neutral">${esc(flairLabel(p.flair))}</span>
+        <span class="tag ${FLAIR_TAG[p.flair] || 'tag-neutral'}">${esc(noEmoji(flairLabel(p.flair)))}</span>
+        <span class="post-by">${esc(p.author)}${p.authorRole ? ` · ${esc(p.authorRole)}` : ''} · ${timeAgo(p.created)}</span>
         ${verdictTag(p)}
-        <span>by ${esc(p.author)}</span>
-        ${p.authorRole ? `<span class="tag tag-accent">${esc(p.authorRole)}</span>` : ''}
-        <span class="muted">${timeAgo(p.created)}</span>
       </p>`;
   }
 
-  function postItem(p) {
-    const excerpt = p.body.length > 240 ? p.body.slice(0, 240) + '…' : p.body;
-    const votes = p.poll ? p.poll.options.reduce((n, o) => n + o.votes, 0) : 0;
+  /* The scam answer is chili red; the rest are pandan green. */
+  const isScamOption = label => /^scam$/i.test(noEmoji(label));
+
+  function listPollHTML(p) {
+    const total = p.poll.options.reduce((a, o) => a + o.votes, 0);
+    const mine = p.poll.myChoice;
     return `
-      <article class="post">
-        ${postMeta(p)}
-        <h2 class="post-title"><a href="#/community/post/${esc(p.id)}">${esc(p.title)}</a></h2>
-        ${excerpt ? `<p class="post-excerpt">${nl2br(excerpt)}</p>` : ''}
-        ${p.image ? `<img class="post-thumb" src="${esc(p.image)}" alt="Image attached to this post">` : ''}
-        <div class="post-actions">
-          ${voteBox('post', p.id, p.score, p.myVote)}
-          <a class="btn btn-ghost" href="#/community/post/${esc(p.id)}">${p.commentCount} comment${p.commentCount === 1 ? '' : 's'}</a>
-          ${p.poll ? `<span class="muted">${votes} poll vote${votes === 1 ? '' : 's'}</span>` : ''}
+      <div class="cm-poll" role="group" aria-label="${p.flair === 'ask' ? 'What neighbours think' : 'Where neighbours stand'}">
+        ${p.poll.options.map((o, i) => {
+          const pct = total ? Math.round(o.votes / total * 100) : 0;
+          return `
+            <button type="button" class="cm-poll-opt ${mine === i ? 'chosen' : ''}" data-listpoll="${i}" data-post="${esc(p.id)}" aria-pressed="${mine === i}">
+              <span class="cm-poll-row"><span>${esc(noEmoji(o.label))}</span><span class="cm-poll-pct">${pct}%</span></span>
+              <span class="cm-poll-track" aria-hidden="true"><span class="cm-poll-bar ${isScamOption(o.label) ? 'is-scam' : ''}" style="width:${pct}%"></span></span>
+            </button>`;
+        }).join('')}
+        <p class="cm-poll-note">${total} vote${total === 1 ? '' : 's'}${mine == null ? ' · tap an answer to vote' : ' · tap your answer again to take it back'}</p>
+      </div>`;
+  }
+
+  const chevron = up => `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="${up ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'}" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+  function postItem(p) {
+    const body = noEmoji(p.body);
+    const excerpt = body.length > 240 ? body.slice(0, 240) + '…' : body;
+    const replies = p.commentCount;
+    return `
+      <article class="cm-post">
+        <div class="cm-vote" role="group" aria-label="Vote on this post">
+          <button type="button" class="cm-vote-btn" data-vote="1" data-kind="post" data-id="${esc(p.id)}" data-mine="${p.myVote}" aria-pressed="${p.myVote === 1}" aria-label="Upvote">${chevron(true)}</button>
+          <span class="cm-score" aria-label="${p.score} points">${p.score}</span>
+          <button type="button" class="cm-vote-btn" data-vote="-1" data-kind="post" data-id="${esc(p.id)}" data-mine="${p.myVote}" aria-pressed="${p.myVote === -1}" aria-label="Downvote">${chevron(false)}</button>
+        </div>
+        <div class="cm-post-body">
+          ${postMeta(p)}
+          <h2 class="cm-post-title"><a href="#/community/post/${esc(p.id)}">${esc(noEmoji(p.title))}</a></h2>
+          ${excerpt ? `<p class="cm-excerpt">${nl2br(excerpt)}</p>` : ''}
+          ${p.image ? `<img class="post-thumb" src="${esc(p.image)}" alt="Image attached to this post">` : ''}
+          ${p.poll ? listPollHTML(p) : ''}
+          <div class="cm-actions">
+            <a class="btn btn-ghost" href="#/community/post/${esc(p.id)}">${replies} repl${replies === 1 ? 'y' : 'ies'}</a>
+            <button type="button" class="btn btn-ghost" data-share="${esc(p.id)}">Share to my block</button>
+          </div>
         </div>
       </article>`;
   }
@@ -2703,8 +2760,8 @@
         <a class="btn btn-ghost back-link" href="#/community">Back to Community</a>
         <article class="post-full">
           ${postMeta(p)}
-          <h1 class="display display-sm">${esc(p.title)}</h1>
-          ${p.body ? `<p class="post-body">${nl2br(p.body)}</p>` : ''}
+          <h1 class="display display-sm">${esc(noEmoji(p.title))}</h1>
+          ${p.body ? `<p class="post-body">${nl2br(noEmoji(p.body))}</p>` : ''}
           ${p.image ? `<img class="post-img" src="${esc(p.image)}" alt="Image attached to this post">` : ''}
           <div class="post-actions">${voteBox('post', p.id, p.score, p.myVote)}</div>
           ${p.flair === 'ask' && p.body ? `
@@ -2817,7 +2874,7 @@
           return `
             <button type="button" class="poll-opt ${mine === i ? 'chosen' : ''}" data-poll="${i}" aria-pressed="${mine === i}">
               <span class="poll-bar" style="width:${pct}%"></span>
-              <span class="poll-label">${esc(plainLabel(o.label))}</span>
+              <span class="poll-label">${esc(noEmoji(o.label))}</span>
               <span class="poll-pct">${pct}%</span>
             </button>`;
         }).join('')}
@@ -2826,7 +2883,7 @@
 
   function openPostModal(prefill = {}) {
     openModal({
-      title: 'Start a post',
+      title: 'New post',
       wide: true,
       body: `
         <form id="postForm" class="form-grid">
@@ -2902,53 +2959,136 @@
     game.i = 0; game.score = 0; game.answered = false;
   }
 
+  /* Learn uses the Community layout: a head band, then progress filters | courses | game. */
+  const learnView = { status: 'all', level: 'all' };
+
+  const courseStatus = p => (p.passed ? 'passed' : p.done.length ? 'started' : 'new');
+  const COURSE_TAG = {
+    passed: ['Passed', 'tag-accent'],
+    started: [null, 'tag-outline'], // label is "N of 3 lessons done"
+    new: ['Not started', 'tag-neutral']
+  };
+
   function renderLearn(seq, sub, id, step) {
     if (sub === 'course' && id) return renderCourse(id, step);
 
-    const passed = KW.COURSES.filter(c => courseProgress(c.id).passed).length;
+    const all = KW.COURSES.map(c => ({ c, p: courseProgress(c.id) }));
+    const passed = all.filter(x => x.p.passed).length;
+    const next = all.find(x => !x.p.passed);
+    const count = st => st === 'all' ? all.length : all.filter(x => courseStatus(x.p) === st).length;
+    const levels = [...new Set(KW.COURSES.map(c => c.level))];
+    const filter = (st, label) => `
+      <li><button type="button" class="cm-topic" data-status="${st}" aria-pressed="${learnView.status === st}">
+        <span>${label}</span><span class="cm-topic-n" aria-label="${count(st)} courses">${count(st)}</span>
+      </button></li>`;
+
     main.innerHTML = `
-      <div class="page learn">
-        <header class="page-head">
-          <div>
-            <p class="kicker">Learn</p>
-            <h1 class="display">Ten minutes to spot a scam.</h1>
-          </div>
-          <div class="head-side">
-            <p class="lede">Six short courses with quizzes, and a Spot-the-scam game. Start with fake delivery messages, the most reported scam this month.</p>
-            <p class="progress-line"><span class="stat-n">${passed}</span> of ${KW.COURSES.length} courses passed</p>
-            ${progressBar(Math.round(passed / KW.COURSES.length * 100), 'Courses passed')}
-            ${passed === KW.COURSES.length ? '<p class="tag tag-accent-2">Kampung Scam-Buster: every course passed</p>' : ''}
+      <div class="learn-page">
+        <header class="cm-head">
+          <div class="cm-head-inner">
+            <div class="cm-head-text">
+              <p class="cm-eyebrow">Short lessons · ${KW.COURSES.length} courses · about 10 minutes each</p>
+              <h1 class="cm-title">Learn</h1>
+              <p class="cm-desc">Short courses with quizzes, and a Spot-the-scam game. Start with fake delivery messages, the most reported scam this month.</p>
+            </div>
+            ${next
+              ? `<a class="btn btn-primary btn-lg cm-new" href="#/learn/course/${next.c.id}">${next.p.done.length ? 'Continue' : passed ? 'Next course' : 'Start the first course'}</a>`
+              : `<a class="btn btn-primary btn-lg cm-new" href="#gameTitle" data-jump-game>Play Spot the scam</a>`}
           </div>
         </header>
 
-        <div class="learn-layout">
-          <section aria-labelledby="coursesTitle">
-            <h2 class="section-title" id="coursesTitle">Courses</h2>
-            <ol class="course-list" role="list">
-              ${KW.COURSES.map((c, i) => {
-                const p = courseProgress(c.id);
-                return `
-                  <li class="course-item">
-                    <span class="course-n">${String(i + 1).padStart(2, '0')}</span>
-                    <div>
-                      <h3 class="course-title"><a href="#/learn/course/${c.id}">${esc(c.title)}</a></h3>
-                      <p class="muted">${esc(c.blurb)}</p>
-                      <p class="course-meta">
-                        <span>${c.minutes} minutes</span><span>${esc(c.level)}</span><span>${c.lessons.length} lessons and a quiz</span>
-                        <span class="tag ${p.passed ? 'tag-accent-2' : p.done.length ? 'tag-accent' : 'tag-neutral'}">${progressWords(p, c)}</span>
-                      </p>
-                    </div>
-                  </li>`;
-              }).join('')}
-            </ol>
+        <div class="cm-body">
+          <nav class="cm-topics" aria-labelledby="progressTitle">
+            <h2 class="kicker" id="progressTitle">Your progress</h2>
+            <p class="lr-progress"><span class="stat-n">${passed}</span> of ${KW.COURSES.length} passed</p>
+            ${progressBar(Math.round(passed / KW.COURSES.length * 100), 'Courses passed')}
+            ${passed === KW.COURSES.length ? '<p class="tag tag-accent lr-badge">Kampung Scam-Buster: every course passed</p>' : ''}
+            <ul class="cm-topic-list lr-filters" role="list">
+              ${filter('all', 'All courses')}
+              ${filter('new', 'Not started')}
+              ${filter('started', 'In progress')}
+              ${filter('passed', 'Passed')}
+            </ul>
+          </nav>
+
+          <section class="cm-feed" aria-labelledby="coursesTitle">
+            <h2 class="sr-only" id="coursesTitle">Courses</h2>
+            <div class="cm-toolbar">
+              <div class="seg lr-levels" role="radiogroup" aria-label="Level">
+                ${[['all', 'All levels'], ...levels.map(l => [l, l])].map(([v, label]) => `
+                  <label class="seg-opt"><input type="radio" name="courseLevel" value="${esc(v)}" ${learnView.level === v ? 'checked' : ''}>${esc(label)}</label>`).join('')}
+              </div>
+            </div>
+            <ol class="lr-list" id="courseList" role="list"></ol>
           </section>
 
-          <section class="game" id="gameCard" aria-labelledby="gameTitle"></section>
+          <aside class="cm-side">
+            <section class="game" id="gameCard" aria-labelledby="gameTitle"></section>
+            <section aria-labelledby="drillTitle">
+              <h2 class="cm-side-title" id="drillTitle">Practise with your family</h2>
+              <ul class="cm-side-list" role="list">
+                <li><strong>Scam Drills.</strong> Send a safe practice scam to someone in your Circle and see if they press Pause.
+                  <p class="lr-drill-btn"><a class="btn btn-secondary" href="#/pause">Send a practice scam</a></p></li>
+              </ul>
+            </section>
+          </aside>
         </div>
       </div>`;
 
+    $$('[data-status]').forEach(b => b.addEventListener('click', () => {
+      learnView.status = b.dataset.status;
+      $$('[data-status]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      drawCourseList();
+    }));
+    $$('input[name=courseLevel]').forEach(r => r.addEventListener('change', () => {
+      learnView.level = r.value;
+      drawCourseList();
+    }));
+    const jump = $('[data-jump-game]');
+    if (jump) jump.addEventListener('click', e => {
+      e.preventDefault(); // a #hash link would change the page
+      $('#gameTitle').scrollIntoView({ behavior: 'smooth' });
+    });
+
+    drawCourseList();
     resetGame();
     renderGame();
+  }
+
+  function drawCourseList() {
+    const list = $('#courseList');
+    if (!list) return;
+    const shown = KW.COURSES
+      .map((c, i) => ({ c, i, p: courseProgress(c.id) }))
+      .filter(x => learnView.status === 'all' || courseStatus(x.p) === learnView.status)
+      .filter(x => learnView.level === 'all' || x.c.level === learnView.level);
+    if (!shown.length) {
+      list.innerHTML = '<li class="empty"><p>No courses match. Try another filter.</p></li>';
+      return;
+    }
+    list.innerHTML = shown.map(({ c, i, p }) => {
+      const st = courseStatus(p);
+      const [label, tag] = COURSE_TAG[st];
+      const lessonsLeft = p.done.length < c.lessons.length;
+      return `
+        <li class="cm-post lr-course">
+          <span class="lr-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span>
+          <div class="cm-post-body">
+            <p class="post-meta">
+              <span class="tag ${tag}">${label || progressWords(p, c)}</span>
+              <span class="post-by">${c.minutes} minutes · ${esc(c.level)} · ${c.lessons.length} lessons and a quiz</span>
+            </p>
+            <h3 class="cm-post-title"><a href="#/learn/course/${c.id}">${esc(c.title)}</a></h3>
+            <p class="cm-excerpt">${esc(c.blurb)}</p>
+            ${st === 'started' ? progressBar(p.pct, `${c.title}: progress`) : ''}
+            <div class="cm-actions">
+              <a class="btn btn-ghost" href="#/learn/course/${c.id}">${st === 'new' ? 'Start' : st === 'passed' ? 'Review the lessons' : lessonsLeft ? 'Continue' : 'Back to the lessons'}</a>
+              ${st !== 'passed' && !lessonsLeft ? `<a class="btn btn-ghost" href="#/learn/course/${c.id}/quiz">Take the quiz</a>` : ''}
+              ${st === 'passed' ? `<a class="btn btn-ghost" href="#/learn/course/${c.id}/quiz">Retake the quiz</a>` : ''}
+            </div>
+          </div>
+        </li>`;
+    }).join('');
   }
 
   function renderGame() {
@@ -2958,7 +3098,7 @@
       const best = Math.max(prefs.gameBest || 0, game.score);
       if (best !== prefs.gameBest) { prefs.gameBest = best; savePrefs(); }
       card.innerHTML = `
-        <h2 class="kicker" id="gameTitle">Spot the scam</h2>
+        <h2 class="cm-side-title" id="gameTitle">Spot the scam</h2>
         <p class="game-score"><span class="stat-n">${game.score}</span> of ${game.order.length} right</p>
         <p class="game-verdict">${game.score === game.order.length ? 'Perfect. You’re a natural scam-spotter.' : game.score >= 3 ? 'Nice work. A few of those were tricky.' : 'Scams are designed to fool people. Try a course and play again.'}</p>
         <p class="muted">Your best score: ${best} of ${game.order.length}</p>
@@ -2968,7 +3108,7 @@
     }
     const item = KW.SPOT_GAME[game.order[game.i]];
     card.innerHTML = `
-      <h2 class="kicker" id="gameTitle">Spot the scam</h2>
+      <h2 class="cm-side-title" id="gameTitle">Spot the scam</h2>
       <p class="muted">Message ${game.i + 1} of ${game.order.length} · ${game.score} right so far</p>
       <figure class="game-msg">
         <blockquote>${esc(item.msg)}</blockquote>
