@@ -126,6 +126,11 @@ textarea.input { line-height: 1.75rem; }
 
 /* ---------- header, footer and global UI ---------- */
 .site-bar { padding: var(--space-3) var(--gutter); flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+
+/* Three zones on every page: header and footer in the surface colour, the body in cream,
+   with a single dark line where they meet. */
+.site-header { background: var(--color-surface); border-bottom: 1px solid var(--color-text); }
+.site-header .input { background: var(--color-bg); } /* the language list stands out on the darker header */
 .nav-town { font-weight: 400; color: var(--ink-70); }
 .site-bar .nav-brand { color: var(--color-text); text-decoration: none; font-size: 1.125rem; min-height: 44px; display: inline-flex; align-items: center; gap: var(--space-2); }
 .logo { width: 2.25rem; height: 2.25rem; flex: none; }
@@ -150,7 +155,8 @@ main { outline: none; }
 .fab { display: none; }
 .fab[hidden] { display: none !important; }
 
-.site-footer { max-width: 1200px; margin-inline: auto; padding: var(--gap-lg) var(--gutter) var(--bottom); }
+.site-footer { background: var(--color-surface); border-top: 1px solid var(--color-text); padding: var(--gap-lg) var(--gutter) var(--bottom); }
+.footer-grid { max-width: calc(1200px - 2 * var(--gutter)); margin-inline: auto; }
 .footer-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) minmax(0, 4fr); gap: var(--gap-xl); }
 .footer-grid p { margin: 0 0 var(--space-3); }
 .footer-grid .kicker { margin-bottom: var(--space-3); }
@@ -240,8 +246,13 @@ body.route-ask .fab { display: none; }
   --cf-top: 2.25rem;
   --cf-bottom: 2.75rem;
   --cf-stack: 1.75rem;
-  max-width: 1100px; margin-inline: auto;
+  --cf-max: 1100px;
 }
+/* The screen spans the full width so its rules and the bottom band reach the edges;
+   each section keeps the 1100px column. */
+.cf-body, .cf-neighbours, .cf-cases { max-width: var(--cf-max); margin-inline: auto; }
+
+.cf-band { background: var(--color-surface); border-top: 1px solid var(--color-text); }
 .check-first p { margin: 0; }
 
 
@@ -292,7 +303,7 @@ body.route-ask .fab { display: none; }
 
 .cf-neighbours {
   display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: var(--cf-col-gap);
-  padding-top: 1.5rem; border-top: 1px solid var(--color-divider);
+  padding: 1.75rem var(--cf-gutter) 2.25rem; /* 28px 48px 36px */
 }
 .cf-neighbours > section { display: flex; flex-direction: column; gap: .75rem; }
 .duty-list, .block-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .75rem; }
@@ -312,7 +323,7 @@ body.route-ask .fab { display: none; }
 .block-leader { flex: 1; min-width: 1.25rem; align-self: center; border-bottom: 1px dotted color-mix(in srgb, var(--color-text) 45%, transparent); }
 .block-count { font-family: var(--font-heading); color: var(--color-accent-700); }
 
-.cf-cases { padding: 0 var(--cf-gutter) var(--cf-bottom); }
+.cf-cases { padding: var(--cf-bottom) var(--cf-gutter); }
 .cf-cases h2 { font-size: 2rem; line-height: 2.5rem; margin: 0 0 var(--space-6); }
 .cf-cases > .cf-note { margin-bottom: var(--space-4); }
 

@@ -893,6 +893,9 @@
             </div>
           </details>
 
+        </div>
+
+        <div class="cf-band">
           <div class="cf-neighbours">
             <section aria-labelledby="dutyTitle">
               <h2 class="cf-kicker" id="dutyTitle" data-i18n="onDuty"></h2>
