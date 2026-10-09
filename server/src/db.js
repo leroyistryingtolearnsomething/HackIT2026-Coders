@@ -179,6 +179,15 @@ CREATE TABLE IF NOT EXISTS pause_links (
   created_at TEXT NOT NULL
 );
 
+-- AI translations of what residents write, so each text is only translated once per language.
+CREATE TABLE IF NOT EXISTS translations (
+  lang       TEXT NOT NULL,
+  source     TEXT NOT NULL,
+  text       TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (lang, source)
+);
+
 CREATE TABLE IF NOT EXISTS volunteer_sessions (
   token_hash TEXT PRIMARY KEY,
   name       TEXT NOT NULL,

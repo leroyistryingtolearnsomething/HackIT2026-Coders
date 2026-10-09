@@ -57,6 +57,8 @@ Copy `server/.env.example` to `server/.env` to change settings:
 | `GEMINI_API_KEY` | (empty) | Free key from aistudio.google.com/apikey. Never commit it. |
 | `ANTHROPIC_API_KEY` | (empty) | Paid key from console.anthropic.com, if you use Claude. Never commit it. |
 | `ASSISTANT_DAILY_LIMIT` | `500` | Most assistant replies per day for the whole site, to cap cost |
+| `TRANSLATE_DAILY_LIMIT` | `1000` | Most AI translation requests per day (posts, comments and reports read in 华语, Malay or Tamil) |
+| `TRANSLATE_MODEL` | `gemini-flash-lite-latest` | Gemini model used for translating (lighter and faster than the assistant's) |
 | `ASSISTANT_MODEL` | `gemini-flash-latest` / `claude-opus-5-5` | Model the assistant uses |
 
 To reset to the demo content, stop the server and delete `server/data/`. It's reseeded on the next start.

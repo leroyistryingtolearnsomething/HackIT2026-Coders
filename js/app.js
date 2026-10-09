@@ -23,13 +23,95 @@
   const byNewest = (a, b) => new Date(b.created) - new Date(a.created);
   const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
+  /* ---------- translation ----------
+     t('English text') returns that text in the chosen language, from js/i18n.js,
+     or the English when there's no translation yet. {name}-style placeholders are
+     filled from vars. tx() is the same, escaped for use inside HTML. */
+  function t(en, vars) {
+    const dict = (KW.I18N && KW.I18N[prefs.lang]) || {};
+    const s = Object.prototype.hasOwnProperty.call(dict, en) ? dict[en] : en;
+    // {town} is always a town name, so it's shown in the chosen language too.
+    return vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? (k === 'town' ? placeName(vars[k]) : vars[k]) : m)) : s;
+  }
+  const inDictionary = en => Boolean(KW.I18N && KW.I18N.zh && Object.prototype.hasOwnProperty.call(KW.I18N.zh, en));
+  const tx = (en, vars) => esc(t(en, vars));
+  /* Like tx(), but the {placeholders} are filled with ready-made HTML (links, bold numbers). */
+  function th(en, html) {
+    return esc(t(en)).replace(/\{([\w/]+)\}/g, (m, k) => (k in html ? html[k] : m));
+  }
+  const telLink = n => `<a href="tel:${n.replace(/\s/g, '')}">${n}</a>`;
+
+  /* Town names in the chosen language. The English name stays the value that's saved and
+     filtered on; anything after it is kept, so "Tampines CC" becomes "淡滨尼 CC". */
+  function placeName(name) {
+    const s = String(name ?? '');
+    const town = Object.keys(KW.TOWNS).find(n => s === n || s.startsWith(n + ' '));
+    return town ? t(town) + s.slice(town.length) : s;
+  }
+  // "Priya (Student Volunteer)": the role in brackets is translated, the name isn't.
+  const authorName = s => String(s ?? '').replace(/\(([^()]+)\)$/, (m, role) => `(${t(role)})`);
+
+  /* ---------- what residents write ----------
+     Posts, comments, Radar reports and chat messages are written by people, so js/i18n.js
+     can't cover them. written(text) draws the original and marks it; translateWritten()
+     then asks the server's AI for the chosen language and swaps the translation in.
+     Each text is fetched once; if the AI isn't available the original simply stays. */
+  const writtenCache = {};   // lang -> Map(original -> translation, or null when it couldn't be translated)
+  let showOriginal = false;
+  function written(text, { br = false } = {}) {
+    const src = String(text ?? '');
+    const show = v => (br ? nl2br(v) : esc(v));
+    if (prefs.lang === 'en' || showOriginal || !src.trim()) return show(src);
+    const done = writtenCache[prefs.lang] && writtenCache[prefs.lang].get(src);
+    if (done) return `<span class="written" lang="${prefs.lang}">${show(done)}</span>`;
+    return `<span class="written" lang="en" data-written="${esc(src)}"${br ? ' data-br' : ''}>${show(src)}</span>`;
+  }
+  // Fixed labels (like the Scam / Looks legit poll answers) come from js/i18n.js; anything else was written by a person.
+  const label = s => (inDictionary(s) ? tx(s) : written(s));
+
+  let translating = false;
+  async function translateWritten() {
+    const lang = prefs.lang;
+    if (lang === 'en' || showOriginal || translating || !$('[data-written]')) return;
+    const known = writtenCache[lang] || (writtenCache[lang] = new Map());
+    const todo = [...new Set($$('[data-written]').map(el => el.dataset.written))].filter(s => !known.has(s));
+    translating = true;
+    try {
+      for (let i = 0; i < todo.length; i += 40) {
+        const chunk = todo.slice(i, i + 40);
+        const res = await api.post('/translate', { lang, texts: chunk.map(s => s.slice(0, 4000)) });
+        chunk.forEach((s, j) => known.set(s, res.translations[j]));
+      }
+    } catch (err) {
+      todo.forEach(s => { if (!known.has(s)) known.set(s, null); }); // AI switched off or offline: keep the originals
+    } finally {
+      translating = false;
+    }
+    if (prefs.lang !== lang || showOriginal) return;
+    $$('[data-written]').forEach(el => {
+      const done = known.get(el.dataset.written);
+      if (done === undefined) return; // appeared while we waited; handled on the next pass
+      if (done) {
+        el.innerHTML = el.hasAttribute('data-br') ? nl2br(done) : esc(done);
+        el.lang = lang;
+      }
+      el.removeAttribute('data-written');
+    });
+    if ($('[data-written]')) translateWritten();
+  }
+
+  /* Shown above translated posts and reports, with a way back to the original words. */
+  const writtenNote = () => prefs.lang === 'en' ? '' : `
+    <p class="written-note">${tx('Text written by residents is translated automatically by AI, so a few words may be off.')}
+      <button type="button" class="written-toggle" data-show-original>${showOriginal ? tx('Show translation') : tx('Show original')}</button></p>`;
+
   function timeAgo(iso) {
     const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-    if (s < 45) return 'just now';
-    if (s < 3600) return Math.round(s / 60) + ' min ago';
-    if (s < 86400) return Math.round(s / 3600) + 'h ago';
+    if (s < 45) return t('just now');
+    if (s < 3600) return t('{n} min ago', { n: Math.round(s / 60) });
+    if (s < 86400) return t('{n}h ago', { n: Math.round(s / 3600) });
     const d = Math.round(s / 86400);
-    return d === 1 ? 'yesterday' : d + ' days ago';
+    return d === 1 ? t('yesterday') : t('{n} days ago', { n: d });
   }
 
   /* Replace an item in a list by id (or add it), in place. */
@@ -108,7 +190,7 @@
   async function act(button, fn) {
     if (button) button.disabled = true;
     try { return await fn(); } catch (err) {
-      toast(err.message === 'offline' ? 'Can’t reach the server. Check your connection and try again.' : err.message, 'warn');
+      toast(err.message === 'offline' ? t('Can’t reach the server. Check your connection and try again.') : err.message, 'warn');
       return undefined;
     } finally {
       if (button && button.isConnected) button.disabled = false;
@@ -122,7 +204,7 @@
   function toast(msg, type = 'info', { link, linkText } = {}) {
     const el = document.createElement('div');
     el.className = 'toast toast-' + type;
-    el.innerHTML = `<span>${esc(msg)}</span>${link ? `<a href="${esc(link)}">${esc(linkText || 'View')}</a>` : ''}`;
+    el.innerHTML = `<span>${esc(msg)}</span>${link ? `<a href="${esc(link)}">${esc(linkText || t('View'))}</a>` : ''}`;
     $('#toasts').appendChild(el);
     requestAnimationFrame(() => el.classList.add('show'));
     setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 5000);
@@ -139,7 +221,7 @@
         <div class="dialog ${wide ? 'dialog-wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
           <header class="dialog-head">
             <h2 class="dialog-title" id="modalTitle">${esc(title)}</h2>
-            <button type="button" class="btn btn-ghost" data-close>Close</button>
+            <button type="button" class="btn btn-ghost" data-close>${tx('Close')}</button>
           </header>
           <div class="dialog-content">${body}</div>
         </div>
@@ -179,12 +261,12 @@
   function readImage(file, max = 900) {
     return new Promise((resolve, reject) => {
       if (!file) return resolve(null);
-      if (!file.type.startsWith('image/')) return reject(new Error('Please choose an image file.'));
+      if (!file.type.startsWith('image/')) return reject(new Error(t('Please choose an image file.')));
       const reader = new FileReader();
-      reader.onerror = () => reject(new Error('Could not read that file.'));
+      reader.onerror = () => reject(new Error(t('Could not read that file.')));
       reader.onload = () => {
         const img = new Image();
-        img.onerror = () => reject(new Error('Could not read that image.'));
+        img.onerror = () => reject(new Error(t('Could not read that image.')));
         img.onload = () => {
           const scale = Math.min(1, max / Math.max(img.width, img.height));
           const canvas = document.createElement('canvas');
@@ -209,10 +291,10 @@
         <span class="field-label" id="${id}Label">${esc(label)}</span>
         <input type="file" id="${id}" class="sr-only" accept="${SCREENSHOT_TYPES.join(',')}" tabindex="-1" aria-hidden="true">
         <div class="img-picker">
-          <button type="button" class="btn btn-secondary" data-pick="${id}" aria-describedby="${id}Label">Choose a screenshot</button>
-          <span class="muted">JPEG, PNG or WebP, up to 2 MB</span>
+          <button type="button" class="btn btn-secondary" data-pick="${id}" aria-describedby="${id}Label">${tx('Choose a screenshot')}</button>
+          <span class="muted">${tx('JPEG, PNG or WebP, up to 2 MB')}</span>
         </div>
-        <div class="img-preview" id="${id}Prev">${initial ? `<img src="${esc(initial)}" alt="Attached screenshot">` : ''}</div>
+        <div class="img-preview" id="${id}Prev">${initial ? `<img src="${esc(initial)}" alt="${tx('Attached screenshot')}">` : ''}</div>
       </div>`;
   }
 
@@ -225,11 +307,11 @@
     input.addEventListener('change', async () => {
       const file = input.files[0];
       if (!file) return;
-      if (!SCREENSHOT_TYPES.includes(file.type)) { clear(); toast('Please choose a JPEG, PNG or WebP image.', 'warn'); return; }
-      if (file.size > SCREENSHOT_MAX) { clear(); toast('That image is over 2 MB. Please choose a smaller one.', 'warn'); return; }
+      if (!SCREENSHOT_TYPES.includes(file.type)) { clear(); toast(say('imgType'), 'warn'); return; }
+      if (file.size > SCREENSHOT_MAX) { clear(); toast(say('imgSize'), 'warn'); return; }
       try {
         data = await readImage(file);
-        preview.innerHTML = `<img src="${esc(data)}" alt="Your screenshot"><button type="button" class="btn btn-ghost">Remove screenshot</button>`;
+        preview.innerHTML = `<img src="${esc(data)}" alt="${esc(say('shotAlt'))}"><button type="button" class="btn btn-ghost">${esc(say('remove'))}</button>`;
         $('button', preview).addEventListener('click', () => { clear(); if (pick) pick.focus(); });
       } catch (err) {
         clear();
@@ -240,9 +322,9 @@
   }
 
 
-  function townOptions(selected = '', includeAll = false, allLabel = 'All areas') {
-    return (includeAll ? `<option value="">${allLabel}</option>` : '') +
-      Object.keys(KW.TOWNS).map(t => `<option ${t === selected ? 'selected' : ''}>${esc(t)}</option>`).join('');
+  function townOptions(selected = '', includeAll = false, allLabel = t('All areas')) {
+    return (includeAll ? `<option value="">${esc(allLabel)}</option>` : '') +
+      Object.keys(KW.TOWNS).map(n => `<option value="${esc(n)}" ${n === selected ? 'selected' : ''}>${tx(n)}</option>`).join('');
   }
 
   /* ---------- red-flag analysis (instant, in the browser) ---------- */
@@ -254,15 +336,13 @@
 
   /* The same verdict and numbered list as the Check First screen, for posts and dialogs. */
   function flagsHTML(text) {
-    if (!text.trim()) return '<p class="muted">Red flags will appear here as you type.</p>';
+    if (!text.trim()) return `<p class="muted">${tx('Red flags will appear here as you type.')}</p>`;
     const { flags } = analyse(text);
-    const verdict = flags.length === 0 ? 'No obvious red flags. Still unsure? Ask a neighbour.'
-      : flags.length === 1 ? '1 red flag. Pause before you reply.'
-      : `${flags.length} red flags. Don’t tap, don’t pay.`;
+    const verdict = flags.length === 0 ? say('vNone') : flags.length === 1 ? say('vOne') : say('vMany', flags.length);
     return `
-      <p class="flag-verdict">${verdict}</p>
+      <p class="flag-verdict">${esc(verdict)}</p>
       ${flags.length ? `<ol class="flag-list" role="list">${flags.map((f, i) => `
-        <li><span class="flag-n">${i + 1}</span><span class="flag-label">${esc(f.label)}</span><span class="flag-tip">${esc(f.tip)}</span></li>`).join('')}</ol>` : ''}`;
+        <li><span class="flag-n">${i + 1}</span><span class="flag-label">${tx(f.label)}</span><span class="flag-tip">${tx(f.tip)}</span></li>`).join('')}</ol>` : ''}`;
   }
 
   /* ---------- settings, header & volunteer sign-in ---------- */
@@ -273,7 +353,7 @@
     paintHeader();
     if (prefs.volunteer) {
       const v = prefs.volunteer;
-      $('#volStripText').textContent = `Signed in as ${v.name} (${v.role}, ${v.area}).`;
+      $('#volStripText').textContent = t('Signed in as {name} ({role}, {area}).', { name: v.name, role: t(v.role), area: placeName(v.area) });
     }
   }
 
@@ -284,19 +364,41 @@
     $$('[data-i18n]', header).forEach(el => { el.textContent = say(el.dataset.i18n); });
     $$('[data-i18n-label]', header).forEach(el => { el.setAttribute('aria-label', say(el.dataset.i18nLabel)); });
     const town = userTown();
-    $('#navTown').textContent = town ? ` · ${town}` : '';
+    $('#navTown').textContent = town ? ` · ${placeName(town)}` : '';
     $('#volunteerBtn').textContent = say(isVolunteer() ? 'signOut' : 'volunteer');
     $('#langSelect').value = prefs.lang;
+    paintStatic();
     paintAssistant();
   }
 
-  // Set by a page whose own text is translated (today only the Check First screen).
+  /* Fixed text in index.html (footer, skip link…): data-t holds the English. */
+  function paintStatic() {
+    document.documentElement.lang = prefs.lang;
+    $$('[data-t]').forEach(el => { el.textContent = t(el.dataset.t); });
+    $('.site-bar').setAttribute('aria-label', t('Main'));
+    $('#footerHelplines').innerHTML = KW.HELPLINES.map(h =>
+      `<li>${telLink(h.number)} <span>${tx(h.label)}</span><span class="muted">${tx(h.note)}</span></li>`).join('');
+    if (prefs.volunteer) {
+      const v = prefs.volunteer;
+      $('#volStripText').textContent = t('Signed in as {name} ({role}, {area}).', { name: v.name, role: t(v.role), area: placeName(v.area) });
+    }
+  }
+
+  // A page can keep what's typed by redrawing just its own text; otherwise the page is redrawn.
   let onLangChange = null;
   $('#langSelect').addEventListener('change', e => {
     prefs.lang = e.target.value;
     savePrefs();
     paintHeader();
     if (onLangChange) onLangChange();
+    else router();
+  });
+
+  new MutationObserver(debounce(translateWritten, 150)).observe(main, { childList: true, subtree: true });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('[data-show-original]')) return;
+    showOriginal = !showOriginal;
+    router();
   });
 
   document.addEventListener('click', e => {
@@ -308,7 +410,7 @@
   function toggleVolunteer() {
     if (isVolunteer()) {
       api.del('/volunteer/session').catch(() => {});
-      endVolunteerSession('Signed out. Back to the resident view.');
+      endVolunteerSession(t('Signed out. Back to the resident view.'));
     } else {
       openVolunteerLogin();
     }
@@ -328,18 +430,18 @@
   function openVolunteerLogin() {
     const roles = (cache.config && cache.config.volunteerRoles) || ['Digital Ambassador', 'RC Volunteer', 'Student Volunteer', 'CC Scam-Buster'];
     openModal({
-      title: 'Volunteer sign-in',
+      title: t('Volunteer sign-in'),
       body: `
         <form id="volForm" class="form-grid">
-          <p class="muted full">Volunteer mode lets trained Digital Ambassadors, RC/CC and student volunteers answer cases, verify Scam Radar reports and give verdicts in the community.</p>
-          <div class="field full"><label for="vName">Your name</label><input id="vName" class="input" required minlength="2" maxlength="40" autocomplete="name"></div>
-          <div class="field"><label for="vRole">Role</label><select id="vRole" class="input">${roles.map(r => `<option>${esc(r)}</option>`).join('')}</select></div>
-          <div class="field"><label for="vArea">Area</label><select id="vArea" class="input">${townOptions(prefs.subscription.town || 'Tampines')}</select></div>
-          <div class="field full"><label for="vCode">Volunteer access code</label><input id="vCode" class="input" type="password" required autocomplete="off"></div>
-          ${cache.config && cache.config.usingDefaultCode ? '<p class="full muted">This server is using the prototype’s default code (see <code>server/.env.example</code>).</p>' : ''}
+          <p class="muted full">${tx('Volunteer mode lets trained Digital Ambassadors, RC/CC and student volunteers answer cases, verify Scam Radar reports and give verdicts in the community.')}</p>
+          <div class="field full"><label for="vName">${tx('Your name')}</label><input id="vName" class="input" required minlength="2" maxlength="40" autocomplete="name"></div>
+          <div class="field"><label for="vRole">${tx('Role')}</label><select id="vRole" class="input">${roles.map(r => `<option value="${esc(r)}">${tx(r)}</option>`).join('')}</select></div>
+          <div class="field"><label for="vArea">${tx('Area')}</label><select id="vArea" class="input">${townOptions(prefs.subscription.town || 'Tampines')}</select></div>
+          <div class="field full"><label for="vCode">${tx('Volunteer access code')}</label><input id="vCode" class="input" type="password" required autocomplete="off"></div>
+          ${cache.config && cache.config.usingDefaultCode ? `<p class="full muted">${th('This server is using the prototype’s default code (see {file}).', { file: '<code>server/.env.example</code>' })}</p>` : ''}
           <div class="full form-actions">
-            <button type="button" class="btn btn-secondary" data-close>Cancel</button>
-            <button type="submit" class="btn btn-primary">Sign in</button>
+            <button type="button" class="btn btn-secondary" data-close>${tx('Cancel')}</button>
+            <button type="submit" class="btn btn-primary">${tx('Sign in')}</button>
           </div>
         </form>`,
       onMount: body => {
@@ -356,7 +458,7 @@
             closeModal({ silent: true });
             applySettings();
             connectEvents();
-            toast(`Welcome, ${res.volunteer.name}! Volunteer mode is on.`, 'ok');
+            toast(t('Welcome, {name}! Volunteer mode is on.', { name: res.volunteer.name }), 'ok');
             router();
           });
         });
@@ -371,14 +473,12 @@
   });
 
   $('#resetLocal').addEventListener('click', () => {
-    if (!confirm('Clear this browser’s Kampung Watch data? Your course progress, alert settings and anonymous identity will be reset.')) return;
+    if (!confirm(t('Clear this browser’s Kampung Watch data? Your course progress, alert settings and anonymous identity will be reset.'))) return;
     try { localStorage.removeItem(PREFS_KEY); } catch (e) { /* ignore */ }
     location.replace('#/home');
     location.reload();
   });
 
-  $('#footerHelplines').innerHTML = KW.HELPLINES.map(h =>
-    `<li><a href="tel:${h.number.replace(/\s/g, '')}">${esc(h.number)}</a> <span>${esc(h.label)}</span><span class="muted">${esc(h.note)}</span></li>`).join('');
 
   /* ---------- live updates ----------
      A Server-Sent Events stream, with polling as a backup: some networks and
@@ -458,9 +558,9 @@
       upsert(cache.cases, c);
       renderCaseList();
     } else if (kind === 'reply' && !isVolunteer()) {
-      notify(`${by} replied`, 'Your “Is this a scam?” case has an answer.', '#/ask');
+      notify(t('{name} replied', { name: by }), t('Your “Is this a scam?” case has an answer.'), '#/ask');
     } else if (kind === 'new' && isVolunteer()) {
-      notify('New case', 'A resident needs help checking a message.', '#/ask');
+      notify(t('New case'), t('A resident needs help checking a message.'), '#/ask');
     }
   }
 
@@ -475,7 +575,7 @@
   }
 
   function notify(title, body, link) {
-    toast(`${title}: ${body}`, 'info', { link, linkText: 'Open' });
+    toast(`${title}: ${body}`, 'info', { link, linkText: t('Open') });
     if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
       try { new Notification(title, { body }); } catch (e) { /* some browsers need a service worker */ }
     }
@@ -516,7 +616,7 @@
     $('#fab').hidden = routes[route] === renderAsk || routes[route] === renderPause || route === 'ai' || route === 'sos';
     document.body.classList.remove('route-ask');
     onLangChange = null;
-    main.innerHTML = '<div class="page"><p class="kicker" role="status">Loading…</p></div>';
+    main.innerHTML = `<div class="page"><p class="kicker" role="status">${tx('Loading…')}</p></div>`;
     window.scrollTo({ top: 0, behavior: 'instant' });
     try {
       await routes[route](seq, ...current.args);
@@ -536,11 +636,11 @@
     main.innerHTML = `
       <div class="page">
         <div class="error-block">
-          <p class="kicker">${offline ? 'Offline' : 'Error'}</p>
-          <h1 class="display">${offline ? 'Can’t reach the Kampung Watch server.' : 'Something went wrong.'}</h1>
-          <p class="lede">${offline ? 'Check your connection. If you’re running it yourself, start the server with <code>npm start</code> in the project folder.' : esc(err.message)}</p>
-          ${offline ? `<p class="lede">Being pressured to pay right now? Don’t pay. Call someone you trust, or the ScamShield Helpline <a href="tel:1799">1799</a>. In danger, call <a href="tel:999">999</a>.</p>` : ''}
-          <button type="button" class="btn btn-primary btn-lg" id="retryBtn">Try again</button>
+          <p class="kicker">${offline ? tx('Offline') : tx('Error')}</p>
+          <h1 class="display">${offline ? tx('Can’t reach the Kampung Watch server.') : tx('Something went wrong.')}</h1>
+          <p class="lede">${offline ? th('Check your connection. If you’re running it yourself, start the server with {cmd} in the project folder.', { cmd: '<code>npm start</code>' }) : esc(err.message)}</p>
+          ${offline ? `<p class="lede">${th('Being pressured to pay right now? Don’t pay. Call someone you trust, or the ScamShield Helpline {1799}. In danger, call {999}.', { 1799: telLink('1799'), 999: telLink('999') })}</p>` : ''}
+          <button type="button" class="btn btn-primary btn-lg" id="retryBtn">${tx('Try again')}</button>
         </div>
       </div>`;
     $('#retryBtn').addEventListener('click', router);
@@ -553,264 +653,7 @@
      ========================================================= */
   /* Static copy for this screen and the site header. Missing keys fall back to English.
      {999} and {1799} in `help` become tap-to-call links. */
-  const ASK_COPY = {
-    en: {
-      aiHeadline: 'Not sure about a message? Ask AI.',
-      aiChatLabel: 'Chat with the assistant',
-      aiTry: 'Try asking',
-      aiPerson: 'Prefer a person?',
-      aiPersonText: 'Trained volunteers check every case by hand, and can call you back.',
-      aiUrgent: 'Money leaving your account right now?',
-      assistant: 'Ask AI',
-      aiKicker: 'AI assistant · it can make mistakes',
-      aiIntro: 'Tell me what happened, or paste the message you received. I’ll point out warning signs and what to do next. A trained volunteer can check anything I’m not sure about.',
-      aiPlaceholder: 'Type your question or paste the message',
-      aiSend: 'Send',
-      aiAttach: 'Add screenshot',
-      aiRemove: 'Remove screenshot',
-      aiHandoff: 'Send this chat to a volunteer',
-      aiNew: 'Start a new chat',
-      aiNote: 'Your messages are sent to Claude, an AI made by Anthropic, to answer. Never share passwords, OTPs or card numbers.',
-      aiNoteGemini: 'Your messages are sent to Google Gemini, an AI service, to answer. On the free plan Google may use them to improve its products, so leave out personal details. Never share passwords, OTPs or card numbers.',
-      aiOff: 'The assistant isn’t switched on yet. You can still ask a trained volunteer.',
-      aiAskVolunteer: 'Ask a volunteer',
-      aiYou: 'You',
-      aiName: 'Assistant',
-      aiThinking: 'Thinking…',
-      aiError: 'Sorry, the assistant couldn’t answer just now. Please try again, or ask a volunteer.',
-      aiSent: 'Sent to a volunteer. You’ll find the conversation under My cases on the Check a message page.',
-      aiShotNote: '(I attached a screenshot.)',
-      aiSuggest: ['I got an SMS about a parcel fee. Is it real?', 'Someone called saying they are from the police.', 'I already clicked a link. What should I do now?'],
-      menu: 'Menu',
-      navPause: 'Pause', navCheck: 'Check a message',
-      navRadar: 'Scam Radar', navCommunity: 'Community', navLearn: 'Learn',
-      langLabel: 'Language', textSize: 'Text size A+', volunteer: 'Volunteer sign in', signOut: 'Volunteer sign out',
-      headline: 'Got a message that feels off? Ask the kampung.',
-      onDuty: 'Neighbours on duty tonight',
-      callMeBack: 'Call me back',
-      dutyNone: town => `No volunteers listed for ${town} yet. Ask anyway: volunteers across Singapore answer.`,
-      block: 'Going round your block this week',
-      blockAll: 'Going round Singapore this week',
-      blockNone: town => `Nothing verified in ${town} this week.`,
-      hit: n => `${n} neighbours hit`,
-      pasteLabel: 'Paste it, or upload a screenshot',
-      placeholder: 'Paste the message here',
-      send: 'Ask a neighbour now',
-      upload: 'Upload screenshot',
-      remove: 'Remove screenshot',
-      shotAlt: 'Your screenshot',
-      help: 'Money leaving your account now? Call {999}. For advice, ScamShield {1799}, any time.',
-      noticed: 'What we noticed',
-      vEmpty: 'Paste a message to check it.',
-      vNone: 'No obvious red flags. Still unsure? Ask a neighbour.',
-      vOne: '1 red flag. Pause before you reply.',
-      vMany: n => `${n} red flags. Don’t tap, don’t pay.`,
-      footnote: 'This is a pause, not a verdict. A neighbour checks every case by hand.',
-      more: 'More options: how it reached you, or ask for a call back',
-      channel: 'How did it reach you?',
-      cbIntro: 'Prefer to talk? Leave your number and a volunteer will call you back.',
-      cbName: 'Your name', cbPhone: 'Phone number', cbLang: 'Language for the call',
-      privacy: 'Only verified volunteers see your case. Never send passwords, OTPs or full card numbers.',
-      cases: 'My cases', inbox: 'Volunteer inbox',
-      needInput: 'Please paste the message or add a screenshot first.',
-      sent: 'Sent! A volunteer will pick this up shortly.',
-      imgType: 'Please choose a JPEG, PNG or WebP image.',
-      imgSize: 'That image is over 2 MB. Please choose a smaller one.',
-      casesOffline: 'Can’t load your cases right now. The check above still works.'
-    },
-    zh: {
-      aiHeadline: '不确定一条信息？问问 AI。',
-      aiChatLabel: '与助手对话',
-      aiTry: '可以这样问',
-      aiPerson: '想找真人帮忙？',
-      aiPersonText: '受过训练的义工会亲手核查每一个案例，也可以给您回电。',
-      aiUrgent: '钱正在从您的户口被转走？',
-      assistant: '问 AI 助手',
-      aiKicker: 'AI 助手 · 可能会出错',
-      aiIntro: '告诉我发生了什么，或贴上您收到的信息。我会指出危险信号和下一步该怎么做。我不确定的，可以交给受过训练的义工核查。',
-      aiPlaceholder: '输入您的问题或贴上信息',
-      aiSend: '发送',
-      aiAttach: '添加截图',
-      aiRemove: '移除截图',
-      aiHandoff: '把这段对话交给义工',
-      aiNew: '开始新对话',
-      aiNote: '您的信息会发送给 Anthropic 公司开发的 AI「Claude」来回答。切勿分享密码、OTP 或卡号。',
-      aiNoteGemini: '您的信息会发送给 Google 的 AI 服务 Gemini 来回答。在免费方案下，Google 可能会用这些信息改进其产品，所以请不要附上个人资料。切勿分享密码、OTP 或卡号。',
-      aiOff: '助手尚未启用。您仍然可以请受过训练的义工帮忙。',
-      aiAskVolunteer: '请义工帮忙',
-      aiYou: '您',
-      aiName: '助手',
-      aiThinking: '正在思考…',
-      aiError: '抱歉，助手暂时无法回答。请再试一次，或请义工帮忙。',
-      aiSent: '已交给义工。您可以在“检查信息”页面的“我的案例”中查看这段对话。',
-      aiShotNote: '（我附上了一张截图。）',
-      aiSuggest: ['我收到一条关于包裹费用的短信，是真的吗？', '有人打电话说他是警察。', '我已经点了链接，现在该怎么办？'],
-      menu: '菜单',
-      navPause: '暂停求助', navCheck: '检查信息',
-      navRadar: '诈骗雷达', navCommunity: '社区', navLearn: '学习',
-      langLabel: '语言', textSize: '字体大小 A+', volunteer: '义工登录', signOut: '义工退出',
-      headline: '收到一条感觉不对劲的信息？问问甘榜邻居。',
-      onDuty: '今晚值班的邻居',
-      callMeBack: '请给我回电',
-      dutyNone: town => `${town}暂时没有登记的义工。照样可以提问，全新加坡的义工都会回答。`,
-      block: '本周在您附近流传的骗局',
-      blockAll: '本周在新加坡流传的骗局',
-      blockNone: town => `本周${town}没有经核实的骗局。`,
-      hit: n => `${n} 位邻居遇到`,
-      pasteLabel: '把信息贴在这里，或上传截图',
-      placeholder: '在这里粘贴信息',
-      send: '马上问问邻居',
-      upload: '上传截图',
-      remove: '移除截图',
-      shotAlt: '您的截图',
-      help: '钱正在从您的户口被转走？请拨打 {999}。如需咨询，可随时拨打 ScamShield {1799}。',
-      noticed: '我们发现了什么',
-      vEmpty: '贴上信息，我们帮您检查。',
-      vNone: '没有明显的危险信号。还是不放心？问问邻居吧。',
-      vOne: '1 个危险信号。回复之前先停一停。',
-      vMany: n => `${n} 个危险信号。别点链接，别付钱。`,
-      footnote: '这只是提醒您停一停，不是最终判断。每一个案例都由邻居亲手核查。',
-      more: '更多选项：信息来源，或要求回电',
-      channel: '您是怎么收到的？',
-      cbIntro: '想直接通话？留下电话号码，义工会给您回电。',
-      cbName: '您的名字', cbPhone: '电话号码', cbLang: '通话语言',
-      privacy: '只有经过认证的义工才能看到您的案例。切勿发送密码、OTP 或完整的卡号。',
-      cases: '我的案例', inbox: '义工收件箱',
-      needInput: '请先粘贴信息或上传截图。',
-      sent: '已发送！义工很快就会处理。',
-      imgType: '请选择 JPEG、PNG 或 WebP 图片。',
-      imgSize: '图片超过 2 MB，请选择较小的图片。',
-      casesOffline: '暂时无法载入您的案例。上面的检查仍然可以使用。'
-    },
-    ms: {
-      aiHeadline: 'Ragu dengan sesuatu mesej? Tanya AI.',
-      aiChatLabel: 'Berbual dengan pembantu',
-      aiTry: 'Cuba tanya',
-      aiPerson: 'Lebih suka bercakap dengan orang?',
-      aiPersonText: 'Sukarelawan terlatih menyemak setiap kes sendiri, dan boleh menelefon anda semula.',
-      aiUrgent: 'Wang sedang keluar dari akaun anda?',
-      assistant: 'Tanya AI',
-      aiKicker: 'Pembantu AI · ia boleh tersilap',
-      aiIntro: 'Ceritakan apa yang berlaku, atau tampal mesej yang anda terima. Saya akan tunjukkan tanda bahaya dan langkah seterusnya. Sukarelawan terlatih boleh menyemak apa-apa yang saya kurang pasti.',
-      aiPlaceholder: 'Taip soalan anda atau tampal mesej',
-      aiSend: 'Hantar',
-      aiAttach: 'Tambah tangkapan skrin',
-      aiRemove: 'Buang tangkapan skrin',
-      aiHandoff: 'Hantar perbualan ini kepada sukarelawan',
-      aiNew: 'Mula perbualan baru',
-      aiNote: 'Mesej anda dihantar kepada Claude, AI buatan Anthropic, untuk dijawab. Jangan sekali-kali kongsi kata laluan, OTP atau nombor kad.',
-      aiNoteGemini: 'Mesej anda dihantar kepada Google Gemini, sebuah perkhidmatan AI, untuk dijawab. Dalam pelan percuma, Google mungkin menggunakannya untuk menambah baik produknya, jadi jangan sertakan butiran peribadi. Jangan sekali-kali kongsi kata laluan, OTP atau nombor kad.',
-      aiOff: 'Pembantu belum diaktifkan. Anda masih boleh bertanya kepada sukarelawan terlatih.',
-      aiAskVolunteer: 'Tanya sukarelawan',
-      aiYou: 'Anda',
-      aiName: 'Pembantu',
-      aiThinking: 'Sedang berfikir…',
-      aiError: 'Maaf, pembantu tidak dapat menjawab sekarang. Sila cuba lagi, atau tanya sukarelawan.',
-      aiSent: 'Dihantar kepada sukarelawan. Perbualan ini ada di bawah Kes saya di halaman Semak mesej.',
-      aiShotNote: '(Saya lampirkan tangkapan skrin.)',
-      aiSuggest: ['Saya dapat SMS tentang bayaran bungkusan. Betulkah?', 'Seseorang menelefon mengaku dari polis.', 'Saya sudah tekan pautan. Apa patut saya buat sekarang?'],
-      menu: 'Menu',
-      navPause: 'Jeda', navCheck: 'Semak mesej',
-      navRadar: 'Radar Penipuan', navCommunity: 'Komuniti', navLearn: 'Belajar',
-      langLabel: 'Bahasa', textSize: 'Saiz teks A+', volunteer: 'Log masuk sukarelawan', signOut: 'Log keluar sukarelawan',
-      headline: 'Dapat mesej yang rasa tak kena? Tanya orang kampung.',
-      onDuty: 'Jiran yang bertugas malam ini',
-      callMeBack: 'Telefon saya semula',
-      dutyNone: town => `Belum ada sukarelawan untuk ${town}. Tanya juga: sukarelawan seluruh Singapura akan menjawab.`,
-      block: 'Sedang tersebar di kawasan anda minggu ini',
-      blockAll: 'Sedang tersebar di Singapura minggu ini',
-      blockNone: town => `Tiada penipuan disahkan di ${town} minggu ini.`,
-      hit: n => `${n} jiran terkena`,
-      pasteLabel: 'Tampal di sini, atau muat naik tangkapan skrin',
-      placeholder: 'Tampal mesej di sini',
-      send: 'Tanya jiran sekarang',
-      upload: 'Muat naik tangkapan skrin',
-      remove: 'Buang tangkapan skrin',
-      shotAlt: 'Tangkapan skrin anda',
-      help: 'Wang sedang keluar dari akaun anda? Hubungi {999}. Untuk nasihat, ScamShield {1799}, bila-bila masa.',
-      noticed: 'Apa yang kami perasan',
-      vEmpty: 'Tampal mesej untuk menyemaknya.',
-      vNone: 'Tiada tanda bahaya yang jelas. Masih ragu? Tanya jiran.',
-      vOne: '1 tanda bahaya. Berhenti sejenak sebelum membalas.',
-      vMany: n => `${n} tanda bahaya. Jangan tekan, jangan bayar.`,
-      footnote: 'Ini masa untuk berhenti sejenak, bukan keputusan. Setiap kes disemak sendiri oleh seorang jiran.',
-      more: 'Pilihan lain: bagaimana ia sampai, atau minta panggilan balik',
-      channel: 'Bagaimana anda menerimanya?',
-      cbIntro: 'Lebih suka bercakap? Tinggalkan nombor anda dan sukarelawan akan menelefon anda.',
-      cbName: 'Nama anda', cbPhone: 'Nombor telefon', cbLang: 'Bahasa untuk panggilan',
-      privacy: 'Hanya sukarelawan yang disahkan dapat melihat kes anda. Jangan sekali-kali hantar kata laluan, OTP atau nombor kad penuh.',
-      cases: 'Kes saya', inbox: 'Peti masuk sukarelawan',
-      needInput: 'Sila tampal mesej atau tambah tangkapan skrin dahulu.',
-      sent: 'Dihantar! Seorang sukarelawan akan menyemaknya sebentar lagi.',
-      imgType: 'Sila pilih imej JPEG, PNG atau WebP.',
-      imgSize: 'Imej itu melebihi 2 MB. Sila pilih yang lebih kecil.',
-      casesOffline: 'Kes anda tidak dapat dimuatkan sekarang. Semakan di atas masih berfungsi.'
-    },
-    ta: {
-      aiHeadline: 'ஒரு செய்தி பற்றிச் சந்தேகமா? AI-யிடம் கேளுங்கள்.',
-      aiChatLabel: 'உதவியாளருடன் உரையாடுங்கள்',
-      aiTry: 'இப்படிக் கேட்கலாம்',
-      aiPerson: 'ஒரு நபரிடம் பேச விரும்புகிறீர்களா?',
-      aiPersonText: 'பயிற்சி பெற்ற தொண்டூழியர்கள் ஒவ்வொரு வழக்கையும் நேரடியாகச் சரிபார்க்கிறார்கள், உங்களைத் திரும்ப அழைக்கவும் முடியும்.',
-      aiUrgent: 'உங்கள் கணக்கிலிருந்து இப்போதே பணம் போகிறதா?',
-      assistant: 'AI-யிடம் கேளுங்கள்',
-      aiKicker: 'AI உதவியாளர் · இது தவறு செய்யலாம்',
-      aiIntro: 'என்ன நடந்தது என்று சொல்லுங்கள், அல்லது உங்களுக்கு வந்த செய்தியை ஒட்டுங்கள். அபாய அறிகுறிகளையும் அடுத்து என்ன செய்வது என்பதையும் சொல்வேன். எனக்கு உறுதியாகத் தெரியாதவற்றைப் பயிற்சி பெற்ற தொண்டூழியர் சரிபார்க்கலாம்.',
-      aiPlaceholder: 'உங்கள் கேள்வியைத் தட்டச்சு செய்யுங்கள் அல்லது செய்தியை ஒட்டுங்கள்',
-      aiSend: 'அனுப்பு',
-      aiAttach: 'திரைப்பிடிப்பைச் சேர்',
-      aiRemove: 'திரைப்பிடிப்பை நீக்கு',
-      aiHandoff: 'இந்த உரையாடலைத் தொண்டூழியருக்கு அனுப்பு',
-      aiNew: 'புதிய உரையாடலைத் தொடங்கு',
-      aiNote: 'பதிலளிக்க உங்கள் செய்திகள் Anthropic உருவாக்கிய AI ஆன Claude-க்கு அனுப்பப்படுகின்றன. கடவுச்சொல், OTP அல்லது அட்டை எண்ணை ஒருபோதும் பகிர வேண்டாம்.',
-      aiNoteGemini: 'பதிலளிக்க உங்கள் செய்திகள் Google-இன் AI சேவையான Gemini-க்கு அனுப்பப்படுகின்றன. இலவசத் திட்டத்தில் Google தன் சேவைகளை மேம்படுத்த அவற்றைப் பயன்படுத்தக்கூடும், எனவே தனிப்பட்ட விவரங்களைச் சேர்க்க வேண்டாம். கடவுச்சொல், OTP அல்லது அட்டை எண்ணை ஒருபோதும் பகிர வேண்டாம்.',
-      aiOff: 'உதவியாளர் இன்னும் இயக்கப்படவில்லை. பயிற்சி பெற்ற தொண்டூழியரிடம் இன்னும் கேட்கலாம்.',
-      aiAskVolunteer: 'தொண்டூழியரிடம் கேளுங்கள்',
-      aiYou: 'நீங்கள்',
-      aiName: 'உதவியாளர்',
-      aiThinking: 'யோசிக்கிறது…',
-      aiError: 'மன்னிக்கவும், உதவியாளரால் இப்போது பதிலளிக்க முடியவில்லை. மீண்டும் முயலுங்கள், அல்லது தொண்டூழியரிடம் கேளுங்கள்.',
-      aiSent: 'தொண்டூழியருக்கு அனுப்பப்பட்டது. செய்தியைச் சரிபார் பக்கத்தில் என் வழக்குகள் பகுதியில் இந்த உரையாடல் இருக்கும்.',
-      aiShotNote: '(நான் ஒரு திரைப்பிடிப்பை இணைத்துள்ளேன்.)',
-      aiSuggest: ['பார்சல் கட்டணம் பற்றி எனக்கு ஒரு SMS வந்தது. இது உண்மையா?', 'ஒருவர் காவல்துறையிலிருந்து அழைப்பதாகச் சொன்னார்.', 'நான் ஏற்கெனவே ஒரு இணைப்பைத் தொட்டுவிட்டேன். இப்போது என்ன செய்வது?'],
-      menu: 'பட்டியல்',
-      navPause: 'நிறுத்து', navCheck: 'செய்தியைச் சரிபார்',
-      navRadar: 'மோசடி ரேடார்', navCommunity: 'சமூகம்', navLearn: 'கற்றல்',
-      langLabel: 'மொழி', textSize: 'எழுத்து அளவு A+', volunteer: 'தொண்டூழியர் உள்நுழைவு', signOut: 'தொண்டூழியர் வெளியேறு',
-      headline: 'சந்தேகமான செய்தி வந்ததா? கம்பத்திடம் கேளுங்கள்.',
-      onDuty: 'இன்றிரவு பணியிலுள்ள அண்டை வீட்டார்',
-      callMeBack: 'என்னைத் திரும்ப அழையுங்கள்',
-      dutyNone: town => `${town} பகுதிக்கு இன்னும் தொண்டூழியர்கள் பதிவு செய்யவில்லை. இருந்தாலும் கேளுங்கள்: சிங்கப்பூர் முழுவதும் உள்ள தொண்டூழியர்கள் பதிலளிப்பார்கள்.`,
-      block: 'இந்த வாரம் உங்கள் பகுதியில் பரவுபவை',
-      blockAll: 'இந்த வாரம் சிங்கப்பூரில் பரவுபவை',
-      blockNone: town => `இந்த வாரம் ${town} பகுதியில் சரிபார்க்கப்பட்ட மோசடி எதுவும் இல்லை.`,
-      hit: n => `${n} அண்டை வீட்டார் பாதிப்பு`,
-      pasteLabel: 'அதை இங்கே ஒட்டுங்கள், அல்லது திரைப்பிடிப்பைப் பதிவேற்றுங்கள்',
-      placeholder: 'செய்தியை இங்கே ஒட்டுங்கள்',
-      send: 'இப்போதே அண்டை வீட்டாரிடம் கேளுங்கள்',
-      upload: 'திரைப்பிடிப்பைப் பதிவேற்று',
-      remove: 'திரைப்பிடிப்பை நீக்கு',
-      shotAlt: 'உங்கள் திரைப்பிடிப்பு',
-      help: 'உங்கள் கணக்கிலிருந்து இப்போதே பணம் போகிறதா? {999} ஐ அழையுங்கள். ஆலோசனைக்கு, ScamShield {1799}, எந்நேரமும்.',
-      noticed: 'நாங்கள் கவனித்தவை',
-      vEmpty: 'சரிபார்க்க ஒரு செய்தியை ஒட்டுங்கள்.',
-      vNone: 'வெளிப்படையான அபாய அறிகுறிகள் இல்லை. இன்னும் சந்தேகமா? அண்டை வீட்டாரிடம் கேளுங்கள்.',
-      vOne: '1 அபாய அறிகுறி. பதில் அனுப்பும் முன் சற்று நிதானியுங்கள்.',
-      vMany: n => `${n} அபாய அறிகுறிகள். தொடாதீர்கள், பணம் செலுத்தாதீர்கள்.`,
-      footnote: 'இது ஒரு இடைநிறுத்தம், தீர்ப்பு அல்ல. ஒவ்வொரு வழக்கையும் ஒரு அண்டை வீட்டார் நேரடியாகச் சரிபார்க்கிறார்.',
-      more: 'மேலும்: அது எப்படி வந்தது, அல்லது திரும்ப அழைக்கக் கோருங்கள்',
-      channel: 'அது உங்களுக்கு எப்படி வந்தது?',
-      cbIntro: 'பேச விரும்புகிறீர்களா? உங்கள் எண்ணைத் தாருங்கள், ஒரு தொண்டூழியர் உங்களைத் திரும்ப அழைப்பார்.',
-      cbName: 'உங்கள் பெயர்', cbPhone: 'தொலைபேசி எண்', cbLang: 'அழைப்பின் மொழி',
-      privacy: 'சரிபார்க்கப்பட்ட தொண்டூழியர்கள் மட்டுமே உங்கள் வழக்கைப் பார்ப்பார்கள். கடவுச்சொல், OTP அல்லது முழு அட்டை எண்ணை ஒருபோதும் அனுப்பாதீர்கள்.',
-      cases: 'என் வழக்குகள்', inbox: 'தொண்டூழியர் உள்பெட்டி',
-      needInput: 'முதலில் செய்தியை ஒட்டுங்கள் அல்லது திரைப்பிடிப்பைச் சேர்க்கவும்.',
-      sent: 'அனுப்பப்பட்டது! ஒரு தொண்டூழியர் விரைவில் பார்ப்பார்.',
-      imgType: 'JPEG, PNG அல்லது WebP படத்தைத் தேர்ந்தெடுங்கள்.',
-      imgSize: 'அந்தப் படம் 2 MB-க்கு மேல் உள்ளது. சிறிய படத்தைத் தேர்ந்தெடுங்கள்.',
-      casesOffline: 'உங்கள் வழக்குகளை இப்போது ஏற்ற முடியவில்லை. மேலே உள்ள சரிபார்ப்பு இன்னும் வேலை செய்யும்.'
-    }
-  };
+  const ASK_COPY = KW.COPY; // keyed copy for the header and Check a message, in js/i18n.js
 
   function say(key, ...args) {
     const own = ASK_COPY[prefs.lang] || {};
@@ -820,6 +663,8 @@
 
   /* Languages a volunteer can call back in. Must match LANGS in server/src/routes/cases.js. */
   const CALLBACK_LANGS = ['English', '华语 (Mandarin)', 'Bahasa Melayu', 'தமிழ் (Tamil)', 'Hokkien / Teochew'];
+  // Volunteers list their languages in each language's own script; only "English" needs translating.
+  const langList = langs => langs.split(/,\s*/).map(l => tx(l)).join(esc(t(', ')));
   const CALLBACK_LANG_FOR = { English: 'English', 华语: '华语 (Mandarin)', Melayu: 'Bahasa Melayu', தமிழ்: 'தமிழ் (Tamil)', Hokkien: 'Hokkien / Teochew' };
   const CALLBACK_LANG_FOR_UI = { en: 'English', zh: '华语 (Mandarin)', ms: 'Bahasa Melayu', ta: 'தமிழ் (Tamil)' };
 
@@ -876,7 +721,7 @@
               <div class="field">
                 <label for="askChannel" data-i18n="channel"></label>
                 <select id="askChannel" class="input">
-                  ${KW.CHANNELS.map(c => `<option>${esc(c)}</option>`).join('')}
+                  ${KW.CHANNELS.map(c => `<option value="${esc(c)}">${tx(c)}</option>`).join('')}
                 </select>
               </div>
               <p class="cf-note" data-i18n="cbIntro"></p>
@@ -884,7 +729,7 @@
                 <div class="field"><label for="cbName" data-i18n="cbName"></label><input type="text" id="cbName" class="input" maxlength="60" autocomplete="given-name"></div>
                 <div class="field"><label for="cbPhone" data-i18n="cbPhone"></label><input type="tel" id="cbPhone" class="input" inputmode="tel" maxlength="20" autocomplete="tel" placeholder="8123 4567"></div>
                 <div class="field"><label for="cbLang" data-i18n="cbLang"></label>
-                  <select id="cbLang" class="input">${CALLBACK_LANGS.map(l => `<option>${esc(l)}</option>`).join('')}</select>
+                  <select id="cbLang" class="input">${CALLBACK_LANGS.map(l => `<option value="${esc(l)}">${tx(l)}</option>`).join('')}</select>
                 </div>
               </div>
               <p class="cf-note" data-i18n="privacy"></p>
@@ -908,7 +753,7 @@
 
         <section class="cf-cases" aria-labelledby="casesTitle">
           <h2 id="casesTitle" data-i18n="${vol ? 'inbox' : 'cases'}"></h2>
-          <p class="vol-only cf-note">Replies you send here go to residents as ${esc(vol ? prefs.volunteer.name : 'a volunteer')}.</p>
+          <p class="vol-only cf-note">${tx('Replies you send here go to residents as {name}.', { name: vol ? prefs.volunteer.name : t('a volunteer') })}</p>
           <div id="caseList"></div>
         </section>
       </div>`;
@@ -932,8 +777,8 @@
       $('#askFlagList').innerHTML = flags.map((f, i) => `
         <li>
           <span class="cf-flag-n">${i + 1}</span>
-          <span class="cf-flag-label">${esc(f.label)}</span>
-          <span class="cf-flag-tip">${esc(f.tip)}</span>
+          <span class="cf-flag-label">${tx(f.label)}</span>
+          <span class="cf-flag-tip">${tx(f.tip)}</span>
         </li>`).join('');
     }
 
@@ -959,11 +804,11 @@
     function drawDuty() {
       const list = $('#dutyList');
       const onDuty = town ? KW.VOLUNTEERS.filter(v => v.area === town) : KW.VOLUNTEERS.slice(0, 3);
-      if (!onDuty.length) { list.innerHTML = `<li class="cf-note">${esc(say('dutyNone', town))}</li>`; return; }
+      if (!onDuty.length) { list.innerHTML = `<li class="cf-note">${esc(say('dutyNone', placeName(town)))}</li>`; return; }
       list.innerHTML = onDuty.map((v, i) => `
         <li class="duty">
           <span class="duty-avatar" aria-hidden="true">${esc(initials(v.name))}</span>
-          <span class="duty-who"><span class="duty-name">${esc(v.name)}</span><span class="duty-meta">${esc(v.role)} · ${esc(v.langs)}</span></span>
+          <span class="duty-who"><span class="duty-name">${esc(v.name)}</span><span class="duty-meta">${tx(v.role)} · ${langList(v.langs)}</span></span>
           <button type="button" class="btn btn-ghost" data-callme="${i}" aria-label="${esc(say('callMeBack'))}: ${esc(v.name)}">${esc(say('callMeBack'))}</button>
         </li>`).join('');
       $$('[data-callme]', list).forEach(b => b.addEventListener('click', () => {
@@ -986,16 +831,16 @@
       const top = [...blockReports].sort((a, b) => b.count - a.count).slice(0, 4);
       list.innerHTML = top.length ? top.map(r => `
         <li class="block-row">
-          <a href="#/radar" class="block-title">${esc(r.title)}</a>
+          <a href="#/radar" class="block-title">${written(r.title)}</a>
           <span class="block-leader" aria-hidden="true"></span>
           <span class="block-count" aria-label="${esc(say('hit', r.count))}">${r.count}</span>
-        </li>`).join('') : `<li class="cf-note">${esc(say('blockNone', town))}</li>`;
+        </li>`).join('') : `<li class="cf-note">${esc(say('blockNone', placeName(town)))}</li>`;
     }
 
     paintCopy();
     text.addEventListener('input', () => updateCheck());
 
-    onLangChange = paintCopy; // the header's language dropdown re-translates this screen
+    onLangChange = () => { paintCopy(); renderCaseList(); }; // re-translate without losing what's typed
 
     // Screenshot: JPEG, PNG or WebP up to 2 MB, downscaled in the browser before sending.
     const fileInput = $('#askImg');
@@ -1091,52 +936,52 @@
     const vol = isVolunteer();
 
     if (!cache.cases.length) {
-      list.innerHTML = `<div class="empty"><p>${vol ? 'No cases in the inbox right now.' : 'No cases yet. When you send something to check, the conversation with your volunteer appears here.'}</p></div>`;
+      list.innerHTML = `<div class="empty"><p>${vol ? tx('No cases in the inbox right now.') : tx('No cases yet. When you send something to check, the conversation with your volunteer appears here.')}</p></div>`;
       return;
     }
 
     list.innerHTML = cache.cases.map(c => {
-      const status = { waiting: ['Waiting for volunteer', 'tag-outline'], replied: ['Volunteer replied', 'tag-accent'], resolved: ['Resolved', 'tag-neutral'] }[c.status];
+      const status = { waiting: [t('Waiting for volunteer'), 'tag-outline'], replied: [t('Volunteer replied'), 'tag-accent'], resolved: [t('Resolved'), 'tag-neutral'] }[c.status];
       return `
         <article class="case" id="case-${esc(c.id)}">
           <header class="case-head">
             <div class="tag-row">
-              <span class="tag ${status[1]}">${status[0]}</span>
-              ${c.verdict ? `<span class="tag ${VERDICTS[c.verdict][1]}">${VERDICTS[c.verdict][0]}</span>` : ''}
-              ${c.callback ? `<span class="tag tag-neutral">Call-back requested</span>` : ''}
-              ${vol && c.mine ? `<span class="tag tag-neutral">Your own case</span>` : ''}
+              <span class="tag ${status[1]}">${esc(status[0])}</span>
+              ${c.verdict ? `<span class="tag ${VERDICTS[c.verdict][1]}">${tx(VERDICTS[c.verdict][0])}</span>` : ''}
+              ${c.callback ? `<span class="tag tag-neutral">${tx('Call-back requested')}</span>` : ''}
+              ${vol && c.mine ? `<span class="tag tag-neutral">${tx('Your own case')}</span>` : ''}
             </div>
-            <span class="muted">${esc(c.channel)} · ${timeAgo(c.created)}</span>
+            <span class="muted">${tx(c.channel)} · ${timeAgo(c.created)}</span>
           </header>
-          ${vol && c.callback ? `<p class="callback-note">Call <strong>${esc(c.callback.name || 'the resident')}</strong> at <a href="tel:${esc(c.callback.phone.replace(/\s/g, ''))}">${esc(c.callback.phone)}</a> · ${esc(c.callback.lang)}</p>` : ''}
-          <blockquote class="case-quote">${c.text ? nl2br(c.text) : c.image ? '<em>(screenshot only)</em>' : '<em>(call-back request)</em>'}</blockquote>
-          ${c.image ? `<img class="case-img" src="${esc(c.image)}" alt="Screenshot attached to case">` : ''}
+          ${vol && c.callback ? `<p class="callback-note">${th('Call {name} at {phone}', { name: `<strong>${esc(c.callback.name || t('the resident'))}</strong>`, phone: `<a href="tel:${esc(c.callback.phone.replace(/\s/g, ''))}">${esc(c.callback.phone)}</a>` })} · ${tx(c.callback.lang)}</p>` : ''}
+          <blockquote class="case-quote">${c.text ? nl2br(c.text) : c.image ? `<em>${tx('(screenshot only)')}</em>` : `<em>${tx('(call-back request)')}</em>`}</blockquote>
+          ${c.image ? `<img class="case-img" src="${esc(c.image)}" alt="${tx('Screenshot attached to case')}">` : ''}
           <div class="thread">
             ${c.messages.map(m => `
               <div class="msg msg-${messageSide(m, vol)}">
                 ${m.from === 'vol' ? `<span class="msg-name">${esc(m.name)}</span>` : ''}
-                ${m.from === 'resident' && vol ? `<span class="msg-name">Resident</span>` : ''}
-                <p>${nl2br(m.body)}</p>
+                ${m.from === 'resident' && vol ? `<span class="msg-name">${tx('Resident')}</span>` : ''}
+                <p>${written(m.body, { br: true })}</p>
                 <time>${timeAgo(m.at)}</time>
               </div>`).join('')}
-            ${c.status === 'waiting' && c.volunteer && !vol ? `<div class="msg msg-system typing">${esc(c.volunteer.name)} is typing<span class="dots"><i></i><i></i><i></i></span></div>` : ''}
+            ${c.status === 'waiting' && c.volunteer && !vol ? `<div class="msg msg-system typing">${tx('{name} is typing', { name: c.volunteer.name })}<span class="dots"><i></i><i></i><i></i></span></div>` : ''}
           </div>
           ${c.status !== 'resolved' ? `
             ${vol ? `
-              <div class="verdict-row" role="group" aria-label="Set verdict">
-                <span class="muted">Verdict:</span>
-                ${Object.entries(VERDICTS).map(([k, [label]]) => `<button class="btn ${c.verdict === k ? 'btn-primary' : 'btn-secondary'}" data-verdict="${k}" data-id="${esc(c.id)}" aria-pressed="${c.verdict === k}">${label}</button>`).join('')}
+              <div class="verdict-row" role="group" aria-label="${tx('Set verdict')}">
+                <span class="muted">${tx('Verdict:')}</span>
+                ${Object.entries(VERDICTS).map(([k, [label]]) => `<button class="btn ${c.verdict === k ? 'btn-primary' : 'btn-secondary'}" data-verdict="${k}" data-id="${esc(c.id)}" aria-pressed="${c.verdict === k}">${tx(label)}</button>`).join('')}
               </div>` : ''}
             <form class="reply-form" data-id="${esc(c.id)}">
-              <label class="sr-only" for="reply-${esc(c.id)}">Reply</label>
-              <textarea id="reply-${esc(c.id)}" class="input" data-case="${esc(c.id)}" rows="2" maxlength="3000" placeholder="${vol ? 'Reply to the resident as a volunteer…' : 'Add more details or ask a follow-up…'}">${esc(drafts[c.id] || '')}</textarea>
-              <button class="btn btn-primary" type="submit">Send</button>
+              <label class="sr-only" for="reply-${esc(c.id)}">${tx('Reply')}</label>
+              <textarea id="reply-${esc(c.id)}" class="input" data-case="${esc(c.id)}" rows="2" maxlength="3000" placeholder="${vol ? tx('Reply to the resident as a volunteer…') : tx('Add more details or ask a follow-up…')}">${esc(drafts[c.id] || '')}</textarea>
+              <button class="btn btn-primary" type="submit">${tx('Send')}</button>
             </form>` : ''}
           <footer class="case-actions">
-            ${c.status !== 'resolved' ? `<button class="btn btn-ghost" data-resolve="${esc(c.id)}">Mark resolved</button>` : ''}
-            ${c.shared ? `<a class="btn btn-ghost" href="#/community/post/${esc(c.shared)}">View community post</a>`
-              : c.mine ? `<button class="btn btn-ghost" data-share="${esc(c.id)}">Share anonymously with the community</button>` : ''}
-            ${c.verdict === 'scam' ? `<button class="btn btn-ghost" data-radar="${esc(c.id)}">Report to Scam Radar</button>` : ''}
+            ${c.status !== 'resolved' ? `<button class="btn btn-ghost" data-resolve="${esc(c.id)}">${tx('Mark resolved')}</button>` : ''}
+            ${c.shared ? `<a class="btn btn-ghost" href="#/community/post/${esc(c.shared)}">${tx('View community post')}</a>`
+              : c.mine ? `<button class="btn btn-ghost" data-share="${esc(c.id)}">${tx('Share anonymously with the community')}</button>` : ''}
+            ${c.verdict === 'scam' ? `<button class="btn btn-ghost" data-radar="${esc(c.id)}">${tx('Report to Scam Radar')}</button>` : ''}
           </footer>
         </article>`;
     }).join('');
@@ -1175,7 +1020,7 @@
       const id = b.dataset.share;
       const { postId } = await api.post(`/cases/${encodeURIComponent(id)}/share`);
       update(await api.get('/cases/' + encodeURIComponent(id)));
-      toast('Shared to the community with personal details hidden.', 'ok', { link: '#/community/post/' + postId, linkText: 'Open post' });
+      toast(t('Shared to the community with personal details hidden.'), 'ok', { link: '#/community/post/' + postId, linkText: t('Open post') });
     })));
 
     $$('[data-radar]', list).forEach(b => b.addEventListener('click', () => {
@@ -1206,7 +1051,7 @@
   const escalateSeconds = () => (pauseState.stats && pauseState.stats.escalateAfterSeconds) || 90;
   function fmtWait() {
     const s = escalateSeconds();
-    return s >= 120 && s % 60 === 0 ? `${s / 60} minutes` : `${s} seconds`;
+    return s >= 120 && s % 60 === 0 ? t('{n} minutes', { n: s / 60 }) : t('{n} seconds', { n: s });
   }
 
   async function loadPauseData() {
@@ -1226,20 +1071,20 @@
       <div class="page pause-page">
         <header class="page-head">
           <div>
-            <p class="kicker">Pause · before you pay</p>
-            <h1 class="display">Someone pushing you to pay? Press Pause.</h1>
+            <p class="kicker">${tx('Pause · before you pay')}</p>
+            <h1 class="display">${tx('Someone pushing you to pay? Press Pause.')}</h1>
           </div>
           <div class="head-side">
-            <p class="lede">Scammers win by keeping you alone and in a hurry. Pause brings in the people you trust. Your Circle gets an alert straight away and calls you. If no one answers within ${fmtWait()}, a volunteer near you steps in.</p>
+            <p class="lede">${tx('Scammers win by keeping you alone and in a hurry. Pause brings in the people you trust. Your Circle gets an alert straight away and calls you. If no one answers within {wait}, a volunteer near you steps in.', { wait: fmtWait() })}</p>
           </div>
         </header>
-        <section id="pauseZone" class="pause-zone" aria-label="Pause"></section>
+        <section id="pauseZone" class="pause-zone" aria-label="${tx('Pause')}"></section>
         <section id="installZone" class="section install-zone" aria-labelledby="installTitle"></section>
         <section id="guardZone" class="section" aria-labelledby="guardTitle" hidden></section>
         <section id="volPauseZone" class="section vol-only" aria-labelledby="volPauseTitle"></section>
         <section id="circleZone" class="section" aria-labelledby="circleTitle"></section>
         <section class="section" aria-labelledby="impactTitle">
-          <h2 class="section-title" id="impactTitle">Pause so far</h2>
+          <h2 class="section-title" id="impactTitle">${tx('Pause so far')}</h2>
           <div class="stat-row pause-stats" id="pauseStats"></div>
         </section>
       </div>`;
@@ -1303,71 +1148,76 @@
     zone.innerHTML = `
       <div class="pause-start">
         <button type="button" class="pause-btn" id="pauseBtn">
-          <span class="pause-btn-word">Pause</span>
-          <span class="pause-btn-sub">${members.length ? 'Alert my Circle' : 'Alert a volunteer'}</span>
+          <span class="pause-btn-word">${tx('Pause')}</span>
+          <span class="pause-btn-sub">${members.length ? tx('Alert my Circle') : tx('Alert a volunteer')}</span>
         </button>
         <div class="pause-who">
-          <h2 class="kicker">Who gets the alert</h2>
+          <h2 class="kicker">${tx('Who gets the alert')}</h2>
           ${members.length ? `
-            <ul class="pause-people" role="list">${members.map(m => `<li><strong>${esc(m.name)}</strong> <span class="muted">${esc(m.relation)}</span></li>`).join('')}</ul>
-            <p class="muted">If no one answers within ${fmtWait()}, volunteers near ${esc(circle.mine.town)} are alerted too.</p>`
+            <ul class="pause-people" role="list">${members.map(m => `<li><strong>${esc(m.name)}</strong> <span class="muted">${tx(m.relation)}</span></li>`).join('')}</ul>
+            <p class="muted">${tx('If no one answers within {wait}, volunteers near {town} are alerted too.', { wait: fmtWait(), town: circle.mine.town })}</p>`
           : `
-            <p>${circle.mine ? 'No one has joined your Circle yet, so' : 'You haven’t set up your Circle yet, so'} volunteers near you will get the alert.</p>
-            <p><button type="button" class="btn btn-secondary" data-jump="circleTitle">${circle.mine ? 'Invite your family' : 'Set up your Circle'}</button></p>`}
-          <p class="cf-help">Money leaving your account right now? Call <a href="tel:999">999</a>. For advice, call the ScamShield Helpline <a href="tel:1799">1799</a>.</p>
+            <p>${circle.mine ? tx('No one has joined your Circle yet, so volunteers near you will get the alert.') : tx('You haven’t set up your Circle yet, so volunteers near you will get the alert.')}</p>
+            <p><button type="button" class="btn btn-secondary" data-jump="circleTitle">${circle.mine ? tx('Invite your family') : tx('Set up your Circle')}</button></p>`}
+          <p class="cf-help">${th('Money leaving your account right now? Call {999}. For advice, call the ScamShield Helpline {1799}.', { 999: telLink('999'), 1799: telLink('1799') })}</p>
         </div>
       </div>
       ${past.length ? `
         <div class="pause-history">
-          <h2 class="kicker">Your recent Pauses</h2>
+          <h2 class="kicker">${tx('Your recent Pauses')}</h2>
           <ul class="plain-list" role="list">${past.map(p => `
             <li>${timeAgo(p.created)}
-              ${p.outcome ? `<span class="tag ${OUTCOMES[p.outcome][1]}">${OUTCOMES[p.outcome][0]}</span>` : ''}
-              ${p.responder ? `<span class="muted">helped by ${esc(p.responder.name)}</span>` : ''}</li>`).join('')}
+              ${p.outcome ? `<span class="tag ${OUTCOMES[p.outcome][1]}">${tx(OUTCOMES[p.outcome][0])}</span>` : ''}
+              ${p.responder ? `<span class="muted">${tx('helped by {name}', { name: p.responder.name })}</span>` : ''}</li>`).join('')}
           </ul>
         </div>` : ''}`;
   }
 
   function pauseLiveHTML(p) {
     const waiting = !p.responder && p.stage === 'circle';
-    const headline = p.responder ? `${p.responder.name} is calling you now.`
-      : p.stage === 'circle' ? 'Your Circle has been alerted.' : 'Volunteers near you have been alerted.';
+    const headline = p.responder ? t('{name} is calling you now.', { name: p.responder.name })
+      : p.stage === 'circle' ? t('Your Circle has been alerted.') : t('Volunteers near you have been alerted.');
     const deadline = new Date(p.created).getTime() + escalateSeconds() * 1000;
     return `
       <div class="pause-live">
         <div class="pause-live-main">
-          <p class="kicker">Pause is on · started ${timeAgo(p.created)}</p>
+          <p class="kicker">${tx('Pause is on · started {when}', { when: timeAgo(p.created) })}</p>
           <h2 class="pause-headline" role="status">${esc(headline)}</h2>
-          ${p.responder ? `<p class="lede">${esc(p.responder.detail)}${p.responder.kind === 'volunteer' ? ' · volunteer' : ''}</p>` : ''}
+          ${p.responder ? `<p class="lede">${tx(p.responder.detail)}${p.responder.kind === 'volunteer' ? ` · ${tx('volunteer')}` : ''}</p>` : ''}
           ${waiting ? `
-            <p class="pause-clock">If no one answers in <strong id="pauseCountdown" data-deadline="${deadline}">${fmtClock(escalateSeconds())}</strong>, volunteers are alerted too.</p>
-            <div class="btn-row"><button type="button" class="btn btn-secondary" data-escalate="${esc(p.id)}">Get a volunteer now</button></div>` : ''}
-          <ol class="pause-steps">
-            <li><strong>Don’t pay, and don’t share any code.</strong> Not even to “stop” something.</li>
-            <li><strong>It’s OK to hang up.</strong> Real police officers and banks won’t mind.</li>
-            <li><strong>Wait for the call,</strong> or call the ScamShield Helpline <a href="tel:1799">1799</a>.</li>
-          </ol>
-          <h3 class="kicker">Messages</h3>
+            <p class="pause-clock">${th('If no one answers in {time}, volunteers are alerted too.', { time: `<strong id="pauseCountdown" data-deadline="${deadline}">${fmtClock(escalateSeconds())}</strong>` })}</p>
+            <div class="btn-row"><button type="button" class="btn btn-secondary" data-escalate="${esc(p.id)}">${tx('Get a volunteer now')}</button></div>` : ''}
+          ${pauseStepsHTML()}
+          <h3 class="kicker">${tx('Messages')}</h3>
           ${pauseThread(p)}
-          ${pauseReplyForm(p, 'Tell them what’s happening…')}
-          <h3 class="kicker">How did it end?</h3>
+          ${pauseReplyForm(p, t('Tell them what’s happening…'))}
+          <h3 class="kicker">${tx('How did it end?')}</h3>
           ${outcomeButtons(p, true)}
         </div>
         <aside class="pause-live-side" aria-labelledby="signsTitle">
-          <h3 class="kicker" id="signsTitle">What’s happening? Tap any that apply</h3>
+          <h3 class="kicker" id="signsTitle">${tx('What’s happening? Tap any that apply')}</h3>
           <div class="sign-list" role="group" aria-labelledby="signsTitle">
-            ${KW.PAUSE_SIGNS.map(s => `<button type="button" class="sign-btn" id="sign-${s.id}" data-sign="${s.id}" data-id="${esc(p.id)}" aria-pressed="${p.signs.includes(s.id)}">${esc(s.label)}</button>`).join('')}
+            ${KW.PAUSE_SIGNS.map(s => `<button type="button" class="sign-btn" id="sign-${s.id}" data-sign="${s.id}" data-id="${esc(p.id)}" aria-pressed="${p.signs.includes(s.id)}">${tx(s.label)}</button>`).join('')}
           </div>
           <div class="field">
-            <label for="pauseCaller">Who do they say they are?</label>
+            <label for="pauseCaller">${tx('Who do they say they are?')}</label>
             <select id="pauseCaller" class="input" data-id="${esc(p.id)}">
-              <option value="">Not sure</option>
-              ${KW.PAUSE_CALLERS.map(c => `<option ${p.caller === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+              <option value="">${tx('Not sure')}</option>
+              ${KW.PAUSE_CALLERS.map(c => `<option value="${esc(c)}" ${p.caller === c ? 'selected' : ''}>${tx(c)}</option>`).join('')}
             </select>
           </div>
-          <p class="muted">Your Circle sees this straight away, so they know what to say when they call.</p>
+          <p class="muted">${tx('Your Circle sees this straight away, so they know what to say when they call.')}</p>
         </aside>
       </div>`;
+  }
+
+  function pauseStepsHTML() {
+    return `
+      <ol class="pause-steps">
+        <li>${th('{b}Don’t pay, and don’t share any code.{/b} Not even to “stop” something.', { b: '<strong>', '/b': '</strong>' })}</li>
+        <li>${th('{b}It’s OK to hang up.{/b} Real police officers and banks won’t mind.', { b: '<strong>', '/b': '</strong>' })}</li>
+        <li>${th('{b}Wait for the call,{/b} or call the ScamShield Helpline {1799}.', { b: '<strong>', '/b': '</strong>', 1799: telLink('1799') })}</li>
+      </ol>`;
   }
 
   function pauseThread(p) {
@@ -1378,7 +1228,7 @@
       return `
         <div class="msg msg-${side}">
           ${name && side !== 'system' ? `<span class="msg-name">${esc(name)}</span>` : ''}
-          <p>${nl2br(m.body)}</p>
+          <p>${written(m.body, { br: true })}</p>
           <time>${timeAgo(m.at)}</time>
         </div>`;
     }).join('')}</div>`;
@@ -1389,22 +1239,22 @@
     const id = esc(p.id);
     return `
       <form class="reply-form" data-pause-reply="${id}">
-        <label class="sr-only" for="pr-${id}">Message</label>
+        <label class="sr-only" for="pr-${id}">${tx('Message')}</label>
         <textarea id="pr-${id}" class="input" rows="2" maxlength="1000" placeholder="${esc(placeholder)}"></textarea>
-        <button class="btn btn-primary" type="submit">Send</button>
+        <button class="btn btn-primary" type="submit">${tx('Send')}</button>
       </form>`;
   }
 
   function outcomeButtons(p, own) {
     if (p.status !== 'open') {
-      return p.outcome ? `<p><span class="tag ${OUTCOMES[p.outcome][1]}">${OUTCOMES[p.outcome][0]}</span></p>` : '';
+      return p.outcome ? `<p><span class="tag ${OUTCOMES[p.outcome][1]}">${tx(OUTCOMES[p.outcome][0])}</span></p>` : '';
     }
     const id = esc(p.id);
     return `
-      <div class="btn-row pause-outcomes" role="group" aria-label="How did it end?">
-        <button type="button" class="btn btn-primary" data-outcome="stopped" data-id="${id}">${own ? 'I’m safe. I didn’t pay' : `${esc(p.name)} is safe and didn’t pay`}</button>
-        <button type="button" class="btn btn-secondary" data-outcome="safe" data-id="${id}">It was genuine</button>
-        <button type="button" class="btn btn-ghost" data-outcome="lost" data-id="${id}">${own ? 'I already paid or shared details' : 'Money or details were lost'}</button>
+      <div class="btn-row pause-outcomes" role="group" aria-label="${tx('How did it end?')}">
+        <button type="button" class="btn btn-primary" data-outcome="stopped" data-id="${id}">${own ? tx('I’m safe. I didn’t pay') : tx('{name} is safe and didn’t pay', { name: p.name })}</button>
+        <button type="button" class="btn btn-secondary" data-outcome="safe" data-id="${id}">${tx('It was genuine')}</button>
+        <button type="button" class="btn btn-ghost" data-outcome="lost" data-id="${id}">${own ? tx('I already paid or shared details') : tx('Money or details were lost')}</button>
       </div>`;
   }
 
@@ -1413,20 +1263,20 @@
     const id = esc(p.id);
     return `
       <div class="guard-pause">
-        <p class="pause-headline">${esc(p.name)} pressed Pause ${timeAgo(p.created)}.</p>
-        ${p.caller ? `<p>Caller says they are: <strong>${esc(p.caller)}</strong></p>` : ''}
+        <p class="pause-headline">${tx('{name} pressed Pause {when}.', { name: p.name, when: timeAgo(p.created) })}</p>
+        ${p.caller ? `<p>${th('Caller says they are: {who}', { who: `<strong>${tx(p.caller)}</strong>` })}</p>` : ''}
         ${p.signs.length
-          ? `<ul class="sign-tags" role="list">${p.signs.map(s => `<li class="tag tag-accent-2">${esc(SIGN_LABEL[s])}</li>`).join('')}</ul>`
-          : '<p class="muted">They haven’t added any details yet.</p>'}
+          ? `<ul class="sign-tags" role="list">${p.signs.map(s => `<li class="tag tag-accent-2">${tx(SIGN_LABEL[s])}</li>`).join('')}</ul>`
+          : `<p class="muted">${tx('They haven’t added any details yet.')}</p>`}
         ${p.responder
-          ? `<p><strong>${esc(p.responder.name)}</strong> (${esc(p.responder.detail)}) is on it.</p>`
+          ? `<p>${th('{name} ({detail}) is on it.', { name: `<strong>${esc(p.responder.name)}</strong>`, detail: tx(p.responder.detail) })}</p>`
           : `<div class="btn-row">
-              <button type="button" class="btn btn-primary btn-lg" data-respond="${id}">I’m on it, calling now</button>
-              ${escalate && p.stage === 'circle' ? `<button type="button" class="btn btn-ghost" data-escalate="${id}">Ask a volunteer to call</button>` : ''}
+              <button type="button" class="btn btn-primary btn-lg" data-respond="${id}">${tx('I’m on it, calling now')}</button>
+              ${escalate && p.stage === 'circle' ? `<button type="button" class="btn btn-ghost" data-escalate="${id}">${tx('Ask a volunteer to call')}</button>` : ''}
             </div>`}
-        ${p.stage === 'volunteer' && escalate ? '<p class="muted">Volunteers have been alerted too.</p>' : ''}
+        ${p.stage === 'volunteer' && escalate ? `<p class="muted">${tx('Volunteers have been alerted too.')}</p>` : ''}
         ${pauseThread(p)}
-        ${pauseReplyForm(p, `Message ${p.name}…`)}
+        ${pauseReplyForm(p, t('Message {name}…', { name: p.name }))}
         ${outcomeButtons(p, false)}
       </div>`;
   }
@@ -1448,7 +1298,7 @@
   });
   window.addEventListener('appinstalled', () => {
     installPrompt = null;
-    toast('Kampung Watch is on your home screen. Tap it whenever someone pressures you to pay.', 'ok');
+    toast(t('Kampung Watch is on your home screen. Tap it whenever someone pressures you to pay.'), 'ok');
     if ($('#installZone')) drawInstallZone();
   });
 
@@ -1458,32 +1308,32 @@
     const sosOpen = $('#sosBox') ? $('#sosBox').open : false;
     let how;
     if (isStandalone()) {
-      how = '<p>Kampung Watch is on your home screen.</p>';
+      how = `<p>${tx('Kampung Watch is on your home screen.')}</p>`;
     } else if (!window.isSecureContext) {
-      how = '<p class="muted">Adding to the home screen needs the secure (https://) address of Kampung Watch. Open it from that address on your phone.</p>';
+      how = `<p class="muted">${tx('Adding to the home screen needs the secure (https://) address of Kampung Watch. Open it from that address on your phone.')}</p>`;
     } else if (installPrompt) {
-      how = '<p><button type="button" class="btn btn-primary btn-lg" id="installBtn">Add to home screen</button></p>';
+      how = `<p><button type="button" class="btn btn-primary btn-lg" id="installBtn">${tx('Add to home screen')}</button></p>`;
     } else if (isIOS()) {
       how = `<ol class="install-steps">
-          <li>Tap the <strong>Share</strong> button in Safari (the square with an arrow).</li>
-          <li>Choose <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</li>
+          <li>${th('Tap the {b}Share{/b} button in Safari (the square with an arrow).', { b: '<strong>', '/b': '</strong>' })}</li>
+          <li>${th('Choose {b}Add to Home Screen{/b}, then {b}Add{/b}.', { b: '<strong>', '/b': '</strong>' })}</li>
         </ol>`;
     } else {
-      how = '<p>Open your browser’s menu and choose <strong>Add to Home screen</strong> or <strong>Install app</strong>.</p>';
+      how = `<p>${th('Open your browser’s menu and choose {b}Add to Home screen{/b} or {b}Install app{/b}.', { b: '<strong>', '/b': '</strong>' })}</p>`;
     }
     zone.innerHTML = `
-      <h2 class="kicker" id="installTitle">Pause from your home screen</h2>
-      <p>When someone is pushing you to pay, you won’t have time to look for a website. Put Kampung Watch on your home screen: it opens on the Pause button, so help is two taps away.</p>
+      <h2 class="kicker" id="installTitle">${tx('Pause from your home screen')}</h2>
+      <p>${tx('When someone is pushing you to pay, you won’t have time to look for a website. Put Kampung Watch on your home screen: it opens on the Pause button, so help is two taps away.')}</p>
       ${how}
       <details class="cf-more" id="sosBox">
-        <summary>${isIOS() ? 'Even faster: double-tap the back of your iPhone, or ask Siri' : 'Even faster: an emergency link for phone shortcuts'}</summary>
+        <summary>${isIOS() ? tx('Even faster: double-tap the back of your iPhone, or ask Siri') : tx('Even faster: an emergency link for phone shortcuts')}</summary>
         <div class="cf-more-body" id="sosLink"></div>
       </details>
       <label class="check">
         <input type="checkbox" id="homePause" ${homePauseOn() ? 'checked' : ''}>
-        Emergency button: opening Kampung Watch from my home screen starts Pause straight away
+        ${tx('Emergency button: opening Kampung Watch from my home screen starts Pause straight away')}
       </label>
-      <p class="muted">Turn this on only if this phone uses Kampung Watch just for emergencies, for example a phone you set up for a parent.</p>`;
+      <p class="muted">${tx('Turn this on only if this phone uses Kampung Watch just for emergencies, for example a phone you set up for a parent.')}</p>`;
     $('#sosBox').open = sosOpen;
     drawSosLink();
   }
@@ -1500,7 +1350,8 @@
     launch = null;
   }
 
-  const nameList = names => names.join(', ').replace(/, ([^,]*)$/, ' and $1');
+  const nameList = names => names.length < 2 ? names.join('')
+    : names.slice(0, -1).join(t(', ')) + t(' and ') + names[names.length - 1];
   const buzz = () => {
     // Phones only allow vibration after the person has touched the page.
     if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate([200, 100, 200]);
@@ -1510,18 +1361,18 @@
   function startCountdown({ people, send, onCancel }) {
     if (launch) return;
     const who = people.length
-      ? `${nameList(people)} will get an alert and call you.`
-      : 'Volunteers near you will get an alert and call you.';
+      ? t('{names} will get an alert and call you.', { names: nameList(people) })
+      : t('Volunteers near you will get an alert and call you.');
     const el = document.createElement('div');
     el.className = 'launch-overlay';
     el.innerHTML = `
       <div class="launch-box" role="alertdialog" aria-modal="true" aria-labelledby="launchTitle" aria-describedby="launchWho">
-        <p class="kicker">Pause</p>
-        <h2 class="launch-title" id="launchTitle">${people.length ? 'Alerting your Circle in' : 'Alerting volunteers in'} <span class="launch-count" id="launchCount">5</span></h2>
+        <p class="kicker">${tx('Pause')}</p>
+        <h2 class="launch-title" id="launchTitle">${th(people.length ? 'Alerting your Circle in {n}' : 'Alerting volunteers in {n}', { n: '<span class="launch-count" id="launchCount">5</span>' })}</h2>
         <p class="launch-who" id="launchWho">${esc(who)}</p>
         <div class="launch-actions">
-          <button type="button" class="btn btn-primary btn-lg" id="launchNow">Send now</button>
-          <button type="button" class="btn btn-secondary btn-lg" id="launchCancel">Cancel, I tapped by mistake</button>
+          <button type="button" class="btn btn-primary btn-lg" id="launchNow">${tx('Send now')}</button>
+          <button type="button" class="btn btn-secondary btn-lg" id="launchCancel">${tx('Cancel, I tapped by mistake')}</button>
         </div>
       </div>`;
     document.body.appendChild(el);
@@ -1542,7 +1393,7 @@
     $('#launchNow').addEventListener('click', go);
     $('#launchCancel').addEventListener('click', () => {
       cancelLaunch();
-      toast('Cancelled. Nothing was sent.');
+      toast(t('Cancelled. Nothing was sent.'));
       if (onCancel) onCancel();
     });
     $('#launchCancel').focus(); // the safe choice gets the focus
@@ -1558,7 +1409,7 @@
           await api.post('/pauses');
           buzz();
         } catch (err) {
-          toast('Couldn’t send the alert. Don’t pay. Call someone you trust, or the ScamShield Helpline 1799.', 'warn');
+          toast(t('Couldn’t send the alert. Don’t pay. Call someone you trust, or the ScamShield Helpline 1799.'), 'warn');
         }
         await refreshPause();
         const status = $('.pause-headline');
@@ -1586,10 +1437,10 @@
       const offline = err.message === 'offline';
       main.innerHTML = `
         <div class="page sos-page">
-          <p class="kicker">Pause</p>
-          <h1 class="display">${offline ? 'No internet connection.' : 'This emergency link doesn’t work any more.'}</h1>
-          <p class="lede">${offline ? 'Your Circle can’t be alerted without a connection.' : 'Make a new one on the Pause page of Kampung Watch, then update your shortcut.'}</p>
-          <p class="lede">Being pressured to pay right now? Don’t pay. Call someone you trust, or the ScamShield Helpline <a href="tel:1799">1799</a>. In danger, call <a href="tel:999">999</a>.</p>
+          <p class="kicker">${tx('Pause')}</p>
+          <h1 class="display">${offline ? tx('No internet connection.') : tx('This emergency link doesn’t work any more.')}</h1>
+          <p class="lede">${offline ? tx('Your Circle can’t be alerted without a connection.') : tx('Make a new one on the Pause page of Kampung Watch, then update your shortcut.')}</p>
+          <p class="lede">${th('Being pressured to pay right now? Don’t pay. Call someone you trust, or the ScamShield Helpline {1799}. In danger, call {999}.', { 1799: telLink('1799'), 999: telLink('999') })}</p>
         </div>`;
       return;
     }
@@ -1597,27 +1448,22 @@
 
     const draw = s => {
       const p = s.pause;
-      const who = s.people.length ? nameList(s.people) : 'Volunteers near you';
       main.innerHTML = `
         <div class="page sos-page">
-          <p class="kicker">Pause${s.name ? ` · ${esc(s.name)}` : ''}</p>
+          <p class="kicker">${tx('Pause')}${s.name ? ` · ${esc(s.name)}` : ''}</p>
           ${p ? `
             <h1 class="pause-headline" role="status">${p.responder
-              ? `${esc(p.responder.name)} is calling you now.`
+              ? tx('{name} is calling you now.', { name: p.responder.name })
               : p.stage === 'volunteer' && s.people.length
-                ? 'Volunteers near you have been alerted too.'
-                : `${esc(who)} ${s.people.length > 1 ? 'have' : 'has'} been alerted.`}</h1>
-            ${p.responder ? `<p class="lede">${esc(p.responder.detail)}</p>` : '<p class="lede">Someone will call you. Keep your phone near you.</p>'}
-            <ol class="pause-steps">
-              <li><strong>Don’t pay, and don’t share any code.</strong> Not even to “stop” something.</li>
-              <li><strong>It’s OK to hang up.</strong> Real police officers and banks won’t mind.</li>
-              <li><strong>Wait for the call,</strong> or call the ScamShield Helpline <a href="tel:1799">1799</a>.</li>
-            </ol>
-            <p class="muted">To message your Circle or say you’re safe, open Kampung Watch from your home screen.</p>`
+                ? tx('Volunteers near you have been alerted too.')
+                : s.people.length ? tx('{names}: alert sent.', { names: nameList(s.people) }) : tx('Volunteers near you have been alerted.')}</h1>
+            ${p.responder ? `<p class="lede">${tx(p.responder.detail)}</p>` : `<p class="lede">${tx('Someone will call you. Keep your phone near you.')}</p>`}
+            ${pauseStepsHTML()}
+            <p class="muted">${tx('To message your Circle or say you’re safe, open Kampung Watch from your home screen.')}</p>`
           : `
-            <h1 class="display">Someone pushing you to pay?</h1>
-            <p><button type="button" class="pause-btn" id="sosBtn"><span class="pause-btn-word">Pause</span><span class="pause-btn-sub">Alert ${esc(s.people.length ? 'my Circle' : 'a volunteer')}</span></button></p>
-            <p class="cf-help">Money leaving your account right now? Call <a href="tel:999">999</a>. For advice, call the ScamShield Helpline <a href="tel:1799">1799</a>.</p>`}
+            <h1 class="display">${tx('Someone pushing you to pay?')}</h1>
+            <p><button type="button" class="pause-btn" id="sosBtn"><span class="pause-btn-word">${tx('Pause')}</span><span class="pause-btn-sub">${s.people.length ? tx('Alert my Circle') : tx('Alert a volunteer')}</span></button></p>
+            <p class="cf-help">${th('Money leaving your account right now? Call {999}. For advice, call the ScamShield Helpline {1799}.', { 999: telLink('999'), 1799: telLink('1799') })}</p>`}
         </div>`;
       const btn = $('#sosBtn');
       if (btn) btn.addEventListener('click', () => countdown(s));
@@ -1640,7 +1486,7 @@
           draw(res);
           watch();
         } catch (err) {
-          toast('Couldn’t send the alert. Don’t pay. Call someone you trust, or the ScamShield Helpline 1799.', 'warn');
+          toast(t('Couldn’t send the alert. Don’t pay. Call someone you trust, or the ScamShield Helpline 1799.'), 'warn');
         }
       },
       onCancel: () => { const b = $('#sosBtn'); if (b) b.focus(); }
@@ -1659,24 +1505,24 @@
     const token = active && prefs.pauseLink ? prefs.pauseLink : null;
     if (!box.isConnected) return;
     box.innerHTML = token ? `
-        <p>Your emergency link. Keep it private: anyone with it can press Pause for you.</p>
+        <p>${tx('Your emergency link. Keep it private: anyone with it can press Pause for you.')}</p>
         <p><code class="sos-url">${esc(sosUrl(token))}</code></p>
         <div class="btn-row">
-          <button type="button" class="btn btn-secondary" id="copySos">Copy link</button>
-          <button type="button" class="btn btn-ghost" id="newSos">Make a new link</button>
-          <button type="button" class="btn btn-ghost" id="offSos">Turn off</button>
+          <button type="button" class="btn btn-secondary" id="copySos">${tx('Copy link')}</button>
+          <button type="button" class="btn btn-ghost" id="newSos">${tx('Make a new link')}</button>
+          <button type="button" class="btn btn-ghost" id="offSos">${tx('Turn off')}</button>
         </div>
         ${isIOS() ? `
           <ol class="install-steps">
-            <li>Open the <strong>Shortcuts</strong> app, tap <strong>+</strong>, and add the action <strong>Open URLs</strong>.</li>
-            <li>Paste your link into it. Name the shortcut <strong>Kampung Pause</strong>.</li>
-            <li>Go to <strong>Settings › Accessibility › Touch › Back Tap › Double Tap</strong> and choose <strong>Kampung Pause</strong>.</li>
+            <li>${th('Open the {b}Shortcuts{/b} app, tap {b}+{/b}, and add the action {b}Open URLs{/b}.', { b: '<strong>', '/b': '</strong>' })}</li>
+            <li>${th('Paste your link into it. Name the shortcut {b}Kampung Pause{/b}.', { b: '<strong>', '/b': '</strong>' })}</li>
+            <li>${th('Go to {b}Settings › Accessibility › Touch › Back Tap › Double Tap{/b} and choose {b}Kampung Pause{/b}.', { b: '<strong>', '/b': '</strong>' })}</li>
           </ol>
-          <p class="muted">Now a double-tap on the back of your phone, or “Hey Siri, Kampung Pause”, starts Pause. You still get 5 seconds to cancel.</p>`
-        : '<p class="muted">Save it as a bookmark or home-screen shortcut, or attach it to your phone’s gesture or assistant shortcuts. Opening it starts Pause, with 5 seconds to cancel.</p>'}`
+          <p class="muted">${tx('Now a double-tap on the back of your phone, or “Hey Siri, Kampung Pause”, starts Pause. You still get 5 seconds to cancel.')}</p>`
+        : `<p class="muted">${tx('Save it as a bookmark or home-screen shortcut, or attach it to your phone’s gesture or assistant shortcuts. Opening it starts Pause, with 5 seconds to cancel.')}</p>`}`
       : `
-        <p>${active ? 'You made an emergency link on another device or before clearing this browser. Make a new one here (the old one stops working).' : 'Make a private link that starts Pause, for a phone shortcut.'}</p>
-        <p><button type="button" class="btn btn-secondary" id="newSos">Make my emergency link</button></p>`;
+        <p>${active ? tx('You made an emergency link on another device or before clearing this browser. Make a new one here (the old one stops working).') : tx('Make a private link that starts Pause, for a phone shortcut.')}</p>
+        <p><button type="button" class="btn btn-secondary" id="newSos">${tx('Make my emergency link')}</button></p>`;
   }
 
   /* ---------- people you look after ---------- */
@@ -1686,46 +1532,46 @@
     zone.hidden = !list.length;
     if (!list.length) { zone.innerHTML = ''; return; }
     zone.innerHTML = `
-      <div class="section-head"><h2 class="section-title" id="guardTitle">People you look after</h2></div>
+      <div class="section-head"><h2 class="section-title" id="guardTitle">${tx('People you look after')}</h2></div>
       ${list.map(g => {
         const id = esc(g.circleId);
         return `
           <article class="guard" id="guard-${id}">
             <header class="guard-head">
               <h3 class="guard-name">${esc(g.name)}</h3>
-              <span class="muted">${esc(g.town)} · you’re in their Circle as ${esc(g.relation.toLowerCase())}</span>
+              <span class="muted">${esc(placeName(g.town))} · ${tx('you’re in their Circle as: {relation}', { relation: t(g.relation) })}</span>
             </header>
             ${g.openPause ? helperPauseHTML(g.openPause, { escalate: true })
-              : `<p class="muted">No Pause right now. If ${esc(g.name)} presses it, you’ll get an alert on any page of Kampung Watch.</p>`}
+              : `<p class="muted">${tx('No Pause right now. If {name} presses it, you’ll get an alert on any page of Kampung Watch.', { name: g.name })}</p>`}
             <div class="drill-panel">
-              <h4 class="kicker">Scam Drill</h4>
-              <p>Send ${esc(g.name)} a safe practice scam. If they press Pause or delete it, they pass. If they fall for it, they get a 30-second lesson and nothing is lost.</p>
+              <h4 class="kicker">${tx('Scam Drill')}</h4>
+              <p>${tx('Send {name} a safe practice scam. If they press Pause or delete it, they pass. If they fall for it, they get a 30-second lesson and nothing is lost.', { name: g.name })}</p>
               <p class="drill-suggest" data-suggest="${esc(g.town)}" data-for="dt-${id}"></p>
               <div class="inline-form">
                 <div class="field">
-                  <label for="dt-${id}">Practice message</label>
+                  <label for="dt-${id}">${tx('Practice message')}</label>
                   <select id="dt-${id}" class="input">${drillOptions()}</select>
                 </div>
-                <button type="button" class="btn btn-secondary" data-send-drill="${id}">Send practice scam</button>
+                <button type="button" class="btn btn-secondary" data-send-drill="${id}">${tx('Send practice scam')}</button>
               </div>
               ${drillHistory(g.drills, g.drillStats)}
             </div>
-            <p><button type="button" class="btn btn-ghost" data-leave="${esc(String(g.memberId))}" data-name="${esc(g.name)}">Leave ${esc(g.name)}’s Circle</button></p>
+            <p><button type="button" class="btn btn-ghost" data-leave="${esc(String(g.memberId))}" data-name="${esc(g.name)}">${tx('Leave {name}’s Circle', { name: g.name })}</button></p>
           </article>`;
       }).join('')}`;
   }
 
-  const drillOptions = () => KW.DRILLS.map(d => `<option value="${esc(d.id)}">${esc(d.name)} (${esc(d.channel)})</option>`).join('');
+  const drillOptions = () => KW.DRILLS.map(d => `<option value="${esc(d.id)}">${tx(d.name)} (${tx(d.channel)})</option>`).join('');
 
   function drillHistory(drills, stats) {
-    if (!drills.length) return '<p class="muted">No practice scams sent yet.</p>';
+    if (!drills.length) return `<p class="muted">${tx('No practice scams sent yet.')}</p>`;
     return `
-      ${stats.answered ? `<p class="drill-score"><span class="stat-n">${stats.passed}</span> of ${stats.answered} practice scams passed</p>` : ''}
+      ${stats.answered ? `<p class="drill-score">${th('{n} of {total} practice scams passed', { n: `<span class="stat-n">${stats.passed}</span>`, total: stats.answered })}</p>` : ''}
       <ul class="drill-history" role="list">${drills.map(d => `
         <li>
-          <span>${esc(d.name)}</span>
-          ${d.result ? `<span class="tag ${DRILL_RESULTS[d.result][1]}">${DRILL_RESULTS[d.result][0]}</span>` : '<span class="tag tag-outline">Not answered yet</span>'}
-          <span class="muted">${timeAgo(d.created)}${d.sender ? ` · from ${esc(d.sender.name)}` : ''}${d.reportId ? ' · from a Scam Radar wave' : ''}</span>
+          <span>${tx(d.name)}</span>
+          ${d.result ? `<span class="tag ${DRILL_RESULTS[d.result][1]}">${tx(DRILL_RESULTS[d.result][0])}</span>` : `<span class="tag tag-outline">${tx('Not answered yet')}</span>`}
+          <span class="muted">${timeAgo(d.created)}${d.sender ? ` · ${tx('from {name}', { name: d.sender.name })}` : ''}${d.reportId ? ` · ${tx('from a Scam Radar wave')}` : ''}</span>
         </li>`).join('')}
       </ul>`;
   }
@@ -1740,8 +1586,8 @@
       const s = pauseState.suggest[town];
       if (!s || !el.isConnected) continue;
       el.textContent = s.report
-        ? `Verified on Scam Radar in ${town} this week: ${s.report.title}. Suggested practice: ${s.template.name}.`
-        : `No new scam wave verified in ${town} lately. Suggested practice: ${s.template.name}.`;
+        ? t('Verified on Scam Radar in {town} this week: {title}. Suggested practice: {drill}.', { town, title: s.report.title, drill: t(s.template.name) })
+        : t('No new scam wave verified in {town} lately. Suggested practice: {drill}.', { town, drill: t(s.template.name) });
       const select = document.getElementById(el.dataset.for);
       if (select && !(select.id in kept)) select.value = s.template.id;
     }
@@ -1756,31 +1602,31 @@
     const stats = pauseState.drillStats;
     const estateTown = ($('#estateTown') && $('#estateTown').value) || prefs.volunteer.area;
     zone.innerHTML = `
-      <div class="section-head"><h2 class="section-title" id="volPauseTitle">Escalated Pauses</h2></div>
+      <div class="section-head"><h2 class="section-title" id="volPauseTitle">${tx('Escalated Pauses')}</h2></div>
       ${open.length ? open.map(p => `
         <article class="guard">
           <header class="guard-head">
             <h3 class="guard-name">${esc(p.name)}</h3>
-            <span class="muted">${esc(p.town || 'Town not set')} · ${p.circleSize ? 'their Circle didn’t answer in time' : 'no Circle set up'}</span>
+            <span class="muted">${esc(p.town ? placeName(p.town) : t('Town not set'))} · ${p.circleSize ? tx('their Circle didn’t answer in time') : tx('no Circle set up')}</span>
           </header>
           ${helperPauseHTML(p)}
         </article>`).join('')
-        : '<p class="muted">No escalated Pauses right now. When a resident’s Circle doesn’t answer in time, the Pause appears here.</p>'}
+        : `<p class="muted">${tx('No escalated Pauses right now. When a resident’s Circle doesn’t answer in time, the Pause appears here.')}</p>`}
 
-      <h3 class="section-title section-title-sm">Estate drill</h3>
-      <p>Send this week’s practice scam to every Circle in a town. It matches the newest verified Scam Radar wave there, so residents practise on the scam that’s actually going around.</p>
+      <h3 class="section-title section-title-sm">${tx('Estate drill')}</h3>
+      <p>${tx('Send this week’s practice scam to every Circle in a town. It matches the newest verified Scam Radar wave there, so residents practise on the scam that’s actually going around.')}</p>
       <p class="drill-suggest" data-suggest="${esc(estateTown)}" data-for="estateTemplate" id="estateSuggest"></p>
       <div class="inline-form">
-        <div class="field"><label for="estateTown">Town</label><select id="estateTown" class="input">${townOptions(estateTown)}</select></div>
-        <div class="field"><label for="estateTemplate">Practice message</label><select id="estateTemplate" class="input">${drillOptions()}</select></div>
-        <button type="button" class="btn btn-primary" id="estateSend">Send to every Circle in this town</button>
+        <div class="field"><label for="estateTown">${tx('Town')}</label><select id="estateTown" class="input">${townOptions(estateTown)}</select></div>
+        <div class="field"><label for="estateTemplate">${tx('Practice message')}</label><select id="estateTemplate" class="input">${drillOptions()}</select></div>
+        <button type="button" class="btn btn-primary" id="estateSend">${tx('Send to every Circle in this town')}</button>
       </div>
       ${stats && stats.byTown.length ? `
         <table class="table drill-table">
-          <caption class="kicker">Drill results by town</caption>
-          <thead><tr><th scope="col">Town</th><th scope="col" class="num">Sent</th><th scope="col" class="num">Answered</th><th scope="col" class="num">Passed</th></tr></thead>
-          <tbody>${stats.byTown.map(t => `
-            <tr><td>${esc(t.town)}</td><td class="num">${t.sent}</td><td class="num">${t.answered}</td><td class="num">${t.passRate == null ? '–' : t.passRate + '%'}</td></tr>`).join('')}
+          <caption class="kicker">${tx('Drill results by town')}</caption>
+          <thead><tr><th scope="col">${tx('Town')}</th><th scope="col" class="num">${tx('Sent')}</th><th scope="col" class="num">${tx('Answered')}</th><th scope="col" class="num">${tx('Passed')}</th></tr></thead>
+          <tbody>${stats.byTown.map(row => `
+            <tr><td>${esc(placeName(row.town))}</td><td class="num">${row.sent}</td><td class="num">${row.answered}</td><td class="num">${row.passRate == null ? '–' : row.passRate + '%'}</td></tr>`).join('')}
           </tbody>
         </table>` : ''}`;
   }
@@ -1789,49 +1635,49 @@
   function circleForm(mine) {
     return `
       <form id="circleForm" class="form-grid">
-        <div class="field"><label for="circleName">Your name</label><input id="circleName" class="input" maxlength="40" required autocomplete="given-name" value="${esc(mine ? mine.name : '')}"></div>
-        <div class="field"><label for="circleTown">Your town</label><select id="circleTown" class="input">${townOptions(mine ? mine.town : (prefs.subscription.town || 'Tampines'))}</select></div>
-        <div class="full form-actions"><button type="submit" class="btn btn-primary">${mine ? 'Save' : 'Create my Circle'}</button></div>
+        <div class="field"><label for="circleName">${tx('Your name')}</label><input id="circleName" class="input" maxlength="40" required autocomplete="given-name" value="${esc(mine ? mine.name : '')}"></div>
+        <div class="field"><label for="circleTown">${tx('Your town')}</label><select id="circleTown" class="input">${townOptions(mine ? mine.town : (prefs.subscription.town || 'Tampines'))}</select></div>
+        <div class="full form-actions"><button type="submit" class="btn btn-primary">${mine ? tx('Save') : tx('Create my Circle')}</button></div>
       </form>`;
   }
 
   function drawCircleZone() {
     const zone = $('#circleZone');
     const mine = pauseState.circle.mine;
-    const share = mine && `Join my Kampung Circle so you get an alert if a scammer is pressuring me. Open Kampung Watch, go to Pause, choose "Join their Circle" and enter my code: ${mine.inviteCode}. ${location.origin}/#/pause`;
+    const share = mine && t('Join my Kampung Circle so you get an alert if a scammer is pressuring me. Open Kampung Watch, go to Pause, choose "Join their Circle" and enter my code: {code}.', { code: mine.inviteCode }) + ` ${location.origin}/#/pause`;
     zone.innerHTML = `
-      <div class="section-head"><h2 class="section-title" id="circleTitle" tabindex="-1">Your Kampung Circle</h2></div>
+      <div class="section-head"><h2 class="section-title" id="circleTitle" tabindex="-1">${tx('Your Kampung Circle')}</h2></div>
       <div class="circle-layout">
         <div>
           ${mine ? `
-            <p class="kicker">Your Circle code</p>
-            <p class="circle-code" aria-label="Your Circle code: ${esc(mine.inviteCode.split('').join(' '))}">${esc(mine.inviteCode.slice(0, 3))} ${esc(mine.inviteCode.slice(3))}</p>
-            <p>Send this code to your family. They open Kampung Watch on their phone, go to Pause, and choose <strong>Join their Circle</strong>.</p>
+            <p class="kicker">${tx('Your Circle code')}</p>
+            <p class="circle-code" aria-label="${tx('Your Circle code: {code}', { code: mine.inviteCode.split('').join(' ') })}">${esc(mine.inviteCode.slice(0, 3))} ${esc(mine.inviteCode.slice(3))}</p>
+            <p>${th('Send this code to your family. They open Kampung Watch on their phone, go to Pause, and choose {b}Join their Circle{/b}.', { b: '<strong>', '/b': '</strong>' })}</p>
             <div class="btn-row">
-              <button type="button" class="btn btn-secondary" id="copyCode">Copy code</button>
-              <a class="btn btn-secondary" href="https://wa.me/?text=${encodeURIComponent(share)}" target="_blank" rel="noopener">Send on WhatsApp</a>
-              <button type="button" class="btn btn-ghost" id="newCode">Make a new code</button>
+              <button type="button" class="btn btn-secondary" id="copyCode">${tx('Copy code')}</button>
+              <a class="btn btn-secondary" href="https://wa.me/?text=${encodeURIComponent(share)}" target="_blank" rel="noopener">${tx('Send on WhatsApp')}</a>
+              <button type="button" class="btn btn-ghost" id="newCode">${tx('Make a new code')}</button>
             </div>
-            <h3 class="kicker">In your Circle</h3>
+            <h3 class="kicker">${tx('In your Circle')}</h3>
             ${mine.members.length ? `
               <ul class="member-list" role="list">${mine.members.map(m => `
-                <li><span><strong>${esc(m.name)}</strong> <span class="muted">${esc(m.relation)}</span></span>
-                  <button type="button" class="btn btn-ghost" data-remove="${m.id}" data-name="${esc(m.name)}">Remove</button></li>`).join('')}
-              </ul>` : '<p class="muted">No one yet. Until someone joins, your Pause alerts go to volunteers.</p>'}
-            ${mine.drills.length ? `<h3 class="kicker">Your practice scams</h3>${drillHistory(mine.drills, mine.drillStats)}` : ''}
-            <details class="cf-more"><summary>Change your name or town</summary>${circleForm(mine)}</details>`
+                <li><span><strong>${esc(m.name)}</strong> <span class="muted">${tx(m.relation)}</span></span>
+                  <button type="button" class="btn btn-ghost" data-remove="${m.id}" data-name="${esc(m.name)}">${tx('Remove')}</button></li>`).join('')}
+              </ul>` : `<p class="muted">${tx('No one yet. Until someone joins, your Pause alerts go to volunteers.')}</p>`}
+            ${mine.drills.length ? `<h3 class="kicker">${tx('Your practice scams')}</h3>${drillHistory(mine.drills, mine.drillStats)}` : ''}
+            <details class="cf-more"><summary>${tx('Change your name or town')}</summary>${circleForm(mine)}</details>`
           : `
-            <p>Your Circle is the people who get an alert when you press Pause: your children, grandchildren, a good friend or a neighbour. Set it up once, then send them your code.</p>
+            <p>${tx('Your Circle is the people who get an alert when you press Pause: your children, grandchildren, a good friend or a neighbour. Set it up once, then send them your code.')}</p>
             ${circleForm(null)}`}
         </div>
         <div>
-          <h3 class="kicker" id="joinTitle">Look after someone? Join their Circle</h3>
-          <p>Ask them for their 6-letter Circle code. You’ll get an alert whenever they press Pause, and you can send them practice scams.</p>
+          <h3 class="kicker" id="joinTitle">${tx('Look after someone? Join their Circle')}</h3>
+          <p>${tx('Ask them for their 6-letter Circle code. You’ll get an alert whenever they press Pause, and you can send them practice scams.')}</p>
           <form id="joinForm" class="form-grid" aria-labelledby="joinTitle">
-            <div class="field full"><label for="joinCode">Their Circle code</label><input id="joinCode" class="input circle-code-input" maxlength="9" required autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
-            <div class="field"><label for="joinName">Your name</label><input id="joinName" class="input" maxlength="40" required autocomplete="given-name"></div>
-            <div class="field"><label for="joinRelation">You are their</label><select id="joinRelation" class="input">${KW.RELATIONS.map(r => `<option>${esc(r)}</option>`).join('')}</select></div>
-            <div class="full form-actions"><button type="submit" class="btn btn-primary">Join their Circle</button></div>
+            <div class="field full"><label for="joinCode">${tx('Their Circle code')}</label><input id="joinCode" class="input circle-code-input" maxlength="9" required autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
+            <div class="field"><label for="joinName">${tx('Your name')}</label><input id="joinName" class="input" maxlength="40" required autocomplete="given-name"></div>
+            <div class="field"><label for="joinRelation">${tx('You are their')}</label><select id="joinRelation" class="input">${KW.RELATIONS.map(r => `<option value="${esc(r)}">${tx(r)}</option>`).join('')}</select></div>
+            <div class="full form-actions"><button type="submit" class="btn btn-primary">${tx('Join their Circle')}</button></div>
           </form>
         </div>
       </div>`;
@@ -1839,8 +1685,8 @@
 
   function drawPauseStats() {
     const s = pauseState.stats;
-    const stat = (n, label) => `<div class="stat"><span class="stat-n">${n}</span><span class="stat-label">${label}</span></div>`;
-    const wait = s.medianResponseSeconds == null ? '–' : s.medianResponseSeconds < 120 ? `${s.medianResponseSeconds}s` : `${Math.round(s.medianResponseSeconds / 60)} min`;
+    const stat = (n, label) => `<div class="stat"><span class="stat-n">${esc(n)}</span><span class="stat-label">${tx(label)}</span></div>`;
+    const wait = s.medianResponseSeconds == null ? '–' : s.medianResponseSeconds < 120 ? t('{n}s', { n: s.medianResponseSeconds }) : t('{n} min', { n: Math.round(s.medianResponseSeconds / 60) });
     $('#pauseStats').innerHTML =
       stat(s.pauses, 'Pauses pressed') +
       stat(s.stopped, 'Scams stopped before paying') +
@@ -1857,7 +1703,7 @@
       const node = $('#pauseCountdown');
       if (!node) { clearInterval(pauseTimer); return; }
       const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
-      node.textContent = left ? fmtClock(left) : 'a moment';
+      node.textContent = left ? fmtClock(left) : t('a moment');
       if (!left) clearInterval(pauseTimer); // the server's "escalated" event redraws the page
     };
     tick();
@@ -1878,15 +1724,15 @@
       promptEvent.prompt();
       promptEvent.userChoice.finally(drawInstallZone);
     } else if (b.id === 'newSos') {
-      if (prefs.pauseLink && !confirm('Make a new link? The old one will stop working, so update your shortcut too.')) return;
+      if (prefs.pauseLink && !confirm(t('Make a new link? The old one will stop working, so update your shortcut too.'))) return;
       act(b, async () => {
         prefs.pauseLink = (await api.post('/pause-link')).token;
         savePrefs();
         await drawSosLink();
-        toast('Emergency link ready. Copy it into your shortcut.', 'ok');
+        toast(t('Emergency link ready. Copy it into your shortcut.'), 'ok');
       });
     } else if (b.id === 'offSos') {
-      if (!confirm('Turn off your emergency link? Shortcuts using it will stop working.')) return;
+      if (!confirm(t('Turn off your emergency link? Shortcuts using it will stop working.'))) return;
       act(b, async () => {
         await api.del('/pause-link');
         prefs.pauseLink = null;
@@ -1896,8 +1742,8 @@
     } else if (b.id === 'copySos') {
       const url = $('.sos-url').textContent;
       (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject())
-        .then(() => toast('Link copied. Paste it into your shortcut.', 'ok'))
-        .catch(() => toast('Press and hold the link to copy it.'));
+        .then(() => toast(t('Link copied. Paste it into your shortcut.'), 'ok'))
+        .catch(() => toast(t('Press and hold the link to copy it.')));
     } else if (b.id === 'pauseBtn') {
       startLaunch(); // 5 seconds to cancel a stray tap; sends by itself after that
     } else if (d.jump) {
@@ -1915,33 +1761,33 @@
     } else if (d.outcome) {
       act(b, async () => {
         await api.post(pausePath(d.id, 'resolve'), { outcome: d.outcome });
-        toast(d.outcome === 'lost' ? 'Call your bank’s 24-hour hotline now, then make a police report.' : 'Pause closed. Thank you for checking first.', d.outcome === 'lost' ? 'warn' : 'ok');
+        toast(d.outcome === 'lost' ? t('Call your bank’s 24-hour hotline now, then make a police report.') : t('Pause closed. Thank you for checking first.'), d.outcome === 'lost' ? 'warn' : 'ok');
         await refreshPause();
       });
     } else if (d.sendDrill) {
       const template = document.getElementById('dt-' + d.sendDrill).value;
       act(b, async () => {
         const drill = await api.post('/drills', { circleId: d.sendDrill, template });
-        toast(`Practice scam sent: ${drill.name}. You’ll see here whether they pass.`, 'ok');
+        toast(t('Practice scam sent: {drill}. You’ll see here whether they pass.', { drill: t(drill.name) }), 'ok');
         await refreshPause();
       });
     } else if (b.id === 'estateSend') {
       const town = $('#estateTown').value;
       act(b, async () => {
         const res = await api.post('/drills/estate', { town, template: $('#estateTemplate').value });
-        toast(res.sent ? `Practice scam sent to ${res.sent} Circle${res.sent === 1 ? '' : 's'} in ${res.town}.` : `No Circles in ${res.town} are waiting for a drill right now.`, res.sent ? 'ok' : 'info');
+        toast(res.sent ? t(res.sent === 1 ? 'Practice scam sent to {n} Circle in {town}.' : 'Practice scam sent to {n} Circles in {town}.', { n: res.sent, town: res.town }) : t('No Circles in {town} are waiting for a drill right now.', { town: res.town }), res.sent ? 'ok' : 'info');
         await refreshPause();
       });
     } else if (b.id === 'copyCode') {
       const code = pauseState.circle.mine.inviteCode;
       (navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject())
-        .then(() => toast('Code copied. Paste it into a message to your family.', 'ok'))
-        .catch(() => toast(`Your code is ${code}.`));
+        .then(() => toast(t('Code copied. Paste it into a message to your family.'), 'ok'))
+        .catch(() => toast(t('Your code is {code}.', { code })));
     } else if (b.id === 'newCode') {
-      if (!confirm('Make a new code? The old one will stop working, but people already in your Circle stay in it.')) return;
+      if (!confirm(t('Make a new code? The old one will stop working, but people already in your Circle stay in it.'))) return;
       act(b, async () => { pauseState.circle = await api.post('/circles/code'); redrawPause(); });
     } else if (d.remove || d.leave) {
-      const question = d.remove ? `Remove ${d.name} from your Circle? They won’t get your Pause alerts any more.` : `Leave ${d.name}’s Circle? You won’t get their Pause alerts any more.`;
+      const question = d.remove ? t('Remove {name} from your Circle? They won’t get your Pause alerts any more.', { name: d.name }) : t('Leave {name}’s Circle? You won’t get their Pause alerts any more.', { name: d.name });
       if (!confirm(question)) return;
       act(b, async () => { await api.del('/circles/members/' + encodeURIComponent(d.remove || d.leave)); await refreshPause(); });
     }
@@ -1953,7 +1799,7 @@
     if (form.id === 'circleForm') {
       act(e.submitter, async () => {
         const res = await api.post('/circles', { name: $('#circleName').value, town: $('#circleTown').value });
-        toast(pauseState.circle.mine ? 'Saved.' : 'Your Circle is ready. Now send the code to your family.', 'ok');
+        toast(pauseState.circle.mine ? t('Saved.') : t('Your Circle is ready. Now send the code to your family.'), 'ok');
         pauseState.circle = cache.circle = res;
         paintHeader();
         await refreshPause();
@@ -1963,7 +1809,7 @@
         const res = await api.post('/circles/join', { code: $('#joinCode').value, name: $('#joinName').value, relation: $('#joinRelation').value });
         $('#joinCode').value = '';
         const joined = res.guarding[res.guarding.length - 1];
-        toast(`You’re in ${joined ? joined.name + '’s' : 'their'} Circle. You’ll get an alert if they press Pause.`, 'ok');
+        toast(joined ? t('You’re in {name}’s Circle. You’ll get an alert if they press Pause.', { name: joined.name }) : t('You’re in their Circle. You’ll get an alert if they press Pause.'), 'ok');
         await refreshPause();
         $('#guardTitle').scrollIntoView({ behavior: 'smooth' });
       });
@@ -1984,7 +1830,7 @@
     if (el.id === 'homePause') {
       prefs.homePause = el.checked;
       savePrefs();
-      toast(el.checked ? 'Opening from the home screen will start Pause, with 5 seconds to cancel.' : 'Opening from the home screen will show the Pause button, ready to tap.');
+      toast(el.checked ? t('Opening from the home screen will start Pause, with 5 seconds to cancel.') : t('Opening from the home screen will show the Pause button, ready to tap.'));
     } else if (el.id === 'pauseCaller') {
       act(null, () => api.post(pausePath(el.dataset.id, 'details'), { caller: el.value || null }));
     } else if (el.id === 'estateTown') {
@@ -2001,15 +1847,15 @@
     banner.className = 'alert-banner alert-pause';
     banner.innerHTML = `
       <div class="alert-inner">
-        <p><strong>${esc(p.name)} pressed Pause.</strong> ${p.caller ? `Caller says they are: ${esc(p.caller)}.` : 'Someone may be pressuring them right now.'}</p>
-        <a class="btn btn-secondary" href="#/pause" id="alertView">Open</a>
-        <button type="button" class="btn btn-ghost" id="alertClose">Dismiss</button>
+        <p><strong>${tx('{name} pressed Pause.', { name: p.name })}</strong> ${p.caller ? tx('Caller says they are: {who}.', { who: t(p.caller) }) : tx('Someone may be pressuring them right now.')}</p>
+        <a class="btn btn-secondary" href="#/pause" id="alertView">${tx('Open')}</a>
+        <button type="button" class="btn btn-ghost" id="alertClose">${tx('Dismiss')}</button>
       </div>`;
     banner.hidden = false;
     $('#alertClose').addEventListener('click', () => { banner.hidden = true; });
     $('#alertView').addEventListener('click', () => { banner.hidden = true; });
     if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-      try { new Notification(`${p.name} pressed Pause`, { body: 'Open Kampung Watch to call them.' }); } catch (e) { /* ignore */ }
+      try { new Notification(t('{name} pressed Pause.', { name: p.name }), { body: t('Open Kampung Watch to call them.') }); } catch (e) { /* ignore */ }
     }
   }
 
@@ -2020,31 +1866,31 @@
       if (!(kind === 'updated' && ownOpen)) refreshPause();
       if ((kind === 'new' || kind === 'escalated') && !ownOpen) {
         const p = await api.get('/pauses/' + encodeURIComponent(id)).catch(() => null);
-        if (p && kind === 'new' && p.role === 'circle') toast(`${p.name} pressed Pause.`, 'warn');
-        if (p && kind === 'escalated' && p.role === 'volunteer') toast(`${p.name} needs a volunteer: their Circle didn’t answer in time.`, 'warn');
+        if (p && kind === 'new' && p.role === 'circle') toast(t('{name} pressed Pause.', { name: p.name }), 'warn');
+        if (p && kind === 'escalated' && p.role === 'volunteer') toast(t('{name} needs a volunteer: their Circle didn’t answer in time.', { name: p.name }), 'warn');
       }
       return;
     }
     const p = await api.get('/pauses/' + encodeURIComponent(id)).catch(() => null);
     if (!p) return;
     if (p.role === 'owner') {
-      if (kind === 'responding') notify(`${by} is on it`, 'They’re calling you now.', '#/pause');
-      else if (kind === 'message') notify(`Message from ${by}`, 'Open Pause to read it.', '#/pause');
-      else if (kind === 'escalated') notify('Volunteers alerted', 'A volunteer near you is stepping in.', '#/pause');
+      if (kind === 'responding') notify(t('{name} is on it', { name: by }), t('They’re calling you now.'), '#/pause');
+      else if (kind === 'message') notify(t('Message from {name}', { name: by }), t('Open Pause to read it.'), '#/pause');
+      else if (kind === 'escalated') notify(t('Volunteers alerted'), t('A volunteer near you is stepping in.'), '#/pause');
     } else if (kind === 'new' || (kind === 'escalated' && p.role === 'volunteer')) {
       if (p.status === 'open') showPauseBanner(p);
     } else if (kind === 'responding') {
-      notify(`${by} is on it`, `${by} is calling ${p.name}.`, '#/pause');
+      notify(t('{name} is on it', { name: by }), t('{name} is calling {other}.', { name: by, other: p.name }), '#/pause');
     } else if (kind === 'escalated') {
-      notify('Volunteers alerted', `No one answered ${p.name}’s Pause in time, so volunteers are stepping in.`, '#/pause');
+      notify(t('Volunteers alerted'), t('No one answered {name}’s Pause in time, so volunteers are stepping in.', { name: p.name }), '#/pause');
     } else if (kind === 'resolved' && p.outcome) {
       $('#alertBanner').hidden = true;
-      toast(`${p.name}’s Pause is closed: ${OUTCOMES[p.outcome][0].toLowerCase()}.`, p.outcome === 'lost' ? 'warn' : 'ok');
+      toast(t('{name}’s Pause is closed: {outcome}.', { name: p.name, outcome: t(OUTCOMES[p.outcome][0]) }), p.outcome === 'lost' ? 'warn' : 'ok');
     }
   }
 
   function onCircleEvent({ kind, name }) {
-    if (kind === 'joined') toast(`${name} joined your Kampung Circle.`, 'ok');
+    if (kind === 'joined') toast(t('{name} joined your Kampung Circle.', { name }), 'ok');
     refreshPause();
   }
 
@@ -2055,9 +1901,9 @@
       const drill = pending.find(d => d.id === id);
       if (drill) setTimeout(() => openDrill(drill), 1500); // arrives like a real message, not instantly
     } else if (kind === 'result') {
-      const who = name || 'They';
-      if (result === 'clicked') toast(`${who} fell for the practice scam. They’ve seen a short lesson. Maybe give them a call about it.`, 'warn');
-      else toast(`${who} passed the practice scam: ${result === 'paused' ? 'they pressed Pause' : 'they deleted it'}.`, 'ok');
+      const who = name || t('They');
+      if (result === 'clicked') toast(t('{name} fell for the practice scam. They’ve seen a short lesson. Maybe give them a call about it.', { name: who }), 'warn');
+      else toast(t(result === 'paused' ? '{name} passed the practice scam: they pressed Pause.' : '{name} passed the practice scam: they deleted it.', { name: who }), 'ok');
       refreshPause();
     }
   }
@@ -2073,18 +1919,18 @@
     if (!$('#modal').hidden) { queuedDrill = d; return; }
     const m = d.message;
     openModal({
-      title: 'New message',
+      title: t('New message'),
       body: `
         <div id="drillBody" class="drill-body">
           <div class="drill-phone">
-            <p class="drill-meta">${esc(m.channel)} · <strong>${esc(m.from)}</strong> · ${timeAgo(d.created)}</p>
-            <p class="drill-text">${esc(m.text)}${m.link ? ` <span class="drill-link">${esc(m.link)}</span>` : ''}</p>
+            <p class="drill-meta">${tx(m.channel)} · <strong>${tx(m.from)}</strong> · ${timeAgo(d.created)}</p>
+            <p class="drill-text">${tx(m.text)}${m.link ? ` <span class="drill-link">${esc(m.link)}</span>` : ''}</p>
           </div>
-          <p class="muted">What would you do?</p>
+          <p class="muted">${tx('What would you do?')}</p>
           <div class="drill-actions">
-            <button type="button" class="btn btn-secondary btn-lg" data-drill="clicked">${m.link ? 'Open the link' : 'Reply to them'}</button>
-            <button type="button" class="btn btn-primary btn-lg" data-drill="paused">Pause: check with my Circle</button>
-            <button type="button" class="btn btn-ghost" data-drill="ignored">Delete it</button>
+            <button type="button" class="btn btn-secondary btn-lg" data-drill="clicked">${m.link ? tx('Open the link') : tx('Reply to them')}</button>
+            <button type="button" class="btn btn-primary btn-lg" data-drill="paused">${tx('Pause: check with my Circle')}</button>
+            <button type="button" class="btn btn-ghost" data-drill="ignored">${tx('Delete it')}</button>
           </div>
         </div>`,
       onMount: body => $$('[data-drill]', body).forEach(b => b.addEventListener('click', () => act(b, async () => {
@@ -2096,16 +1942,16 @@
 
   function showDrillResult(body, d) {
     const fromVolunteer = d.sender && d.sender.kind === 'volunteer';
-    const from = d.sender ? d.sender.name : 'your Circle';
-    $('#modalTitle').textContent = 'Scam Drill: practice message';
+    const from = d.sender ? d.sender.name : t('your Circle');
+    $('#modalTitle').textContent = t('Scam Drill: practice message');
     const verdict = { paused: 'Well done. Pressing Pause is exactly right.', ignored: 'Good. Deleting it kept you safe.', clicked: 'That was a scam, but only a practice one.' }[d.result];
     $('#drillBody', body).innerHTML = `
-      ${fromVolunteer ? `<p class="kicker">Sent to everyone in ${esc(d.town)}</p>` : ''}
-      <p class="game-verdict ${d.passed ? 'is-right' : 'is-wrong'}" tabindex="-1" id="drillVerdict">${verdict}</p>
-      <p>This was a safe practice message from ${esc(from)}${fromVolunteer ? ', copied from a scam going around your area' : ''}. ${d.passed ? 'They’ve been told you passed.' : 'Nothing happened: no money or details went anywhere.'}</p>
-      <h3 class="kicker">How to spot it next time</h3>
-      <ol class="flag-list" role="list">${d.lesson.map((l, i) => `<li><span class="flag-n">${i + 1}</span><span class="flag-label">${esc(l)}</span></li>`).join('')}</ol>
-      <div class="btn-row"><button type="button" class="btn btn-primary btn-lg" id="drillDone">Got it</button></div>`;
+      ${fromVolunteer ? `<p class="kicker">${tx('Sent to everyone in {town}', { town: d.town })}</p>` : ''}
+      <p class="game-verdict ${d.passed ? 'is-right' : 'is-wrong'}" tabindex="-1" id="drillVerdict">${tx(verdict)}</p>
+      <p>${fromVolunteer ? tx('This was a safe practice message from {name}, copied from a scam going around your area.', { name: from }) : tx('This was a safe practice message from {name}.', { name: from })} ${d.passed ? tx('They’ve been told you passed.') : tx('Nothing happened: no money or details went anywhere.')}</p>
+      <h3 class="kicker">${tx('How to spot it next time')}</h3>
+      <ol class="flag-list" role="list">${d.lesson.map((l, i) => `<li><span class="flag-n">${i + 1}</span><span class="flag-label">${tx(l)}</span></li>`).join('')}</ol>
+      <div class="btn-row"><button type="button" class="btn btn-primary btn-lg" id="drillDone">${tx('Got it')}</button></div>`;
     $('#drillDone', body).addEventListener('click', () => closeModal());
     $('#drillVerdict', body).focus();
     refreshPause();
@@ -2162,8 +2008,8 @@
     const week = cache.reports.filter(r => r.status === 'verified' && hoursSince(r.created) < 168);
     const town = (sub.enabled && sub.town) || topBy(week, 'town');
     const type = topBy(week.filter(r => r.town === town), 'type');
-    if (!town || !type) return ['Scams near you,', 'verified as they happen.'];
-    return [`${town}, this week:`, `${TYPE_PHRASE[type] || type.toLowerCase()}.`];
+    if (!town || !type) return [t('Scams near you,'), t('verified as they happen.')];
+    return [t('{town}, this week:', { town }), t(TYPE_PHRASE[type] || type) + t('.')];
   }
 
   function drawRadarPage() {
@@ -2175,50 +2021,51 @@
       <div class="page radar">
         <header class="page-head">
           <div>
-            <p class="kicker">Scam Radar${newest ? ` · latest report ${timeAgo(newest.created)}` : ''}</p>
+            <p class="kicker">${tx('Scam Radar')}${newest ? ` · ${tx('latest report {when}', { when: timeAgo(newest.created) })}` : ''}</p>
             <h1 class="display"><span class="line">${esc(line1)}</span> <span class="line">${esc(line2)}</span></h1>
           </div>
           <section class="head-side" aria-labelledby="alertTitle">
-            <h2 class="kicker" id="alertTitle">Alerts for your town</h2>
+            <h2 class="kicker" id="alertTitle">${tx('Alerts for your town')}</h2>
             <p>${sub.enabled
-              ? `Alerts are on for <strong>${esc(sub.town)}</strong>. You’ll hear the moment volunteers verify a new scam wave there.`
-              : 'Get an alert the moment volunteers verify a new scam wave in your town.'}</p>
+              ? th('Alerts are on for {town}. You’ll hear the moment volunteers verify a new scam wave there.', { town: `<strong>${esc(placeName(sub.town))}</strong>` })
+              : tx('Get an alert the moment volunteers verify a new scam wave in your town.')}</p>
             <div class="inline-form">
-              <div class="field"><label for="subTown">Your town</label><select id="subTown" class="input">${townOptions(sub.town, true, 'Choose your town')}</select></div>
+              <div class="field"><label for="subTown">${tx('Your town')}</label><select id="subTown" class="input">${townOptions(sub.town, true, t('Choose your town'))}</select></div>
               ${sub.enabled
-                ? `<button type="button" class="btn btn-secondary" id="subOff">Turn off</button><button type="button" class="btn btn-ghost" id="subTest">Send a test alert</button>`
-                : `<button type="button" class="btn btn-primary" id="subOn">Alert me</button>`}
+                ? `<button type="button" class="btn btn-secondary" id="subOff">${tx('Turn off')}</button><button type="button" class="btn btn-ghost" id="subTest">${tx('Send a test alert')}</button>`
+                : `<button type="button" class="btn btn-primary" id="subOn">${tx('Alert me')}</button>`}
             </div>
           </section>
         </header>
 
-        <section class="stat-row" id="radarStats" aria-label="Summary of the reports shown"></section>
+        <section class="stat-row" id="radarStats" aria-label="${tx('Summary of the reports shown')}"></section>
 
         <figure class="map-figure">
-          <div id="map" role="region" aria-label="Map of scam reports in Singapore"></div>
+          <div id="map" role="region" aria-label="${tx('Map of scam reports in Singapore')}"></div>
           <figcaption class="legend">
-            <span><i class="swatch swatch-verified" aria-hidden="true"></i>Verified scam wave</span>
-            <span><i class="swatch swatch-pending" aria-hidden="true"></i>Awaiting check</span>
-            <span>A bigger circle means more neighbours hit</span>
+            <span><i class="swatch swatch-verified" aria-hidden="true"></i>${tx('Verified scam wave')}</span>
+            <span><i class="swatch swatch-pending" aria-hidden="true"></i>${tx('Awaiting check')}</span>
+            <span>${tx('A bigger circle means more neighbours hit')}</span>
           </figcaption>
         </figure>
 
         <section class="section" aria-labelledby="feedTitle">
           <div class="section-head">
-            <h2 class="section-title" id="feedTitle">Reports</h2>
-            <button type="button" class="btn btn-primary btn-lg" id="reportBtn">Report a scam</button>
+            <h2 class="section-title" id="feedTitle">${tx('Reports')}</h2>
+            <button type="button" class="btn btn-primary btn-lg" id="reportBtn">${tx('Report a scam')}</button>
           </div>
-          <div class="filters" role="search" aria-label="Filter reports">
-            <div class="field"><label for="fTown">Town</label><select id="fTown" class="input">${townOptions(radarFilter.town, true, 'All towns')}</select></div>
-            <div class="field"><label for="fType">Scam type</label><select id="fType" class="input"><option value="">All types</option>${KW.SCAM_TYPES.map(t => `<option ${t === radarFilter.type ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>
-            <div class="field"><label for="fDays">Period</label><select id="fDays" class="input">
-              <option value="1" ${radarFilter.days === 1 ? 'selected' : ''}>Last 24 hours</option>
-              <option value="7" ${radarFilter.days === 7 ? 'selected' : ''}>Last 7 days</option>
-              <option value="30" ${radarFilter.days === 30 ? 'selected' : ''}>Last 30 days</option>
-              <option value="0" ${radarFilter.days === 0 ? 'selected' : ''}>All time</option>
+          <div class="filters" role="search" aria-label="${tx('Filter reports')}">
+            <div class="field"><label for="fTown">${tx('Town')}</label><select id="fTown" class="input">${townOptions(radarFilter.town, true, t('All towns'))}</select></div>
+            <div class="field"><label for="fType">${tx('Scam type')}</label><select id="fType" class="input"><option value="">${tx('All types')}</option>${KW.SCAM_TYPES.map(ty => `<option value="${esc(ty)}" ${ty === radarFilter.type ? 'selected' : ''}>${tx(ty)}</option>`).join('')}</select></div>
+            <div class="field"><label for="fDays">${tx('Period')}</label><select id="fDays" class="input">
+              <option value="1" ${radarFilter.days === 1 ? 'selected' : ''}>${tx('Last 24 hours')}</option>
+              <option value="7" ${radarFilter.days === 7 ? 'selected' : ''}>${tx('Last 7 days')}</option>
+              <option value="30" ${radarFilter.days === 30 ? 'selected' : ''}>${tx('Last 30 days')}</option>
+              <option value="0" ${radarFilter.days === 0 ? 'selected' : ''}>${tx('All time')}</option>
             </select></div>
-            <label class="check"><input type="checkbox" id="fVerified" ${radarFilter.verifiedOnly ? 'checked' : ''}> Verified only</label>
+            <label class="check"><input type="checkbox" id="fVerified" ${radarFilter.verifiedOnly ? 'checked' : ''}> ${tx('Verified only')}</label>
           </div>
+          ${writtenNote()}
           <div id="radarFeed" aria-live="polite"></div>
         </section>
       </div>`;
@@ -2228,14 +2075,14 @@
     const subOn = $('#subOn');
     if (subOn) subOn.addEventListener('click', async () => {
       const town = $('#subTown').value;
-      if (!town) { toast('Choose your town first.', 'warn'); $('#subTown').focus(); return; }
+      if (!town) { toast(t('Choose your town first.'), 'warn'); $('#subTown').focus(); return; }
       if ('Notification' in window && Notification.permission === 'default') {
         try { await Notification.requestPermission(); } catch (e) { /* ignore */ }
       }
       prefs.subscription = { town, enabled: true };
       savePrefs();
       paintHeader();
-      toast(`Alerts on for ${town}.`, 'ok');
+      toast(t('Alerts on for {town}.', { town }), 'ok');
       drawRadarPage();
     });
     const subOff = $('#subOff');
@@ -2244,7 +2091,7 @@
     });
     const subTest = $('#subTest');
     if (subTest) subTest.addEventListener('click', () => pushAlert({
-      town: prefs.subscription.town, title: 'This is a test alert. You’re all set.'
+      town: prefs.subscription.town, title: t('This is a test alert. You’re all set.')
     }));
     $('#subTown').addEventListener('change', e => {
       if (prefs.subscription.enabled && e.target.value) {
@@ -2275,24 +2122,24 @@
 
   function renderRadarStats(reports) {
     const top = topBy(reports, 'town');
-    const stat = (n, label) => `<div class="stat"><span class="stat-n">${n}</span><span class="stat-label">${label}</span></div>`;
+    const stat = (n, label) => `<div class="stat"><span class="stat-n">${n}</span><span class="stat-label">${tx(label)}</span></div>`;
     $('#radarStats').innerHTML =
       stat(reports.length, 'reports shown') +
       stat(reports.filter(r => r.status === 'verified').length, 'verified by CC and RC volunteers') +
       stat(reports.filter(r => r.status === 'pending').length, 'awaiting a volunteer’s check') +
-      stat(top ? esc(top) : 'None', 'hardest-hit town');
+      stat(top ? esc(placeName(top)) : tx('None'), 'hardest-hit town');
   }
 
   const STATUS_TAG = {
-    verified: r => `<span class="tag tag-accent-2">Verified</span>${r.verifiedBy ? `<span class="r-by">${esc(r.verifiedBy)}</span>` : ''}`,
-    pending: () => `<span class="tag tag-outline">Awaiting check</span>`,
-    rumour: r => `<span class="tag tag-neutral">Not a scam wave</span>${r.verifiedBy ? `<span class="r-by">${esc(r.verifiedBy)}</span>` : ''}`
+    verified: r => `<span class="tag tag-accent-2">${tx('Verified')}</span>${r.verifiedBy ? `<span class="r-by">${esc(placeName(r.verifiedBy))}</span>` : ''}`,
+    pending: () => `<span class="tag tag-outline">${tx('Awaiting check')}</span>`,
+    rumour: r => `<span class="tag tag-neutral">${tx('Not a scam wave')}</span>${r.verifiedBy ? `<span class="r-by">${esc(placeName(r.verifiedBy))}</span>` : ''}`
   };
 
   function renderRadarFeed(reports) {
     const feed = $('#radarFeed');
     if (!reports.length) {
-      feed.innerHTML = `<div class="empty"><p>No reports match these filters.</p><button type="button" class="btn btn-secondary" id="clearFilters">Clear filters</button></div>`;
+      feed.innerHTML = `<div class="empty"><p>${tx('No reports match these filters.')}</p><button type="button" class="btn btn-secondary" id="clearFilters">${tx('Clear filters')}</button></div>`;
       $('#clearFilters').addEventListener('click', () => {
         Object.assign(radarFilter, { town: '', type: '', days: 30, verifiedOnly: false });
         drawRadarPage();
@@ -2302,27 +2149,27 @@
     feed.innerHTML = `
       <table class="table radar-table">
         <thead><tr>
-          <th scope="col">Scam</th><th scope="col">Town</th><th scope="col">Status</th>
-          <th scope="col" class="num">Neighbours hit</th><th scope="col"><span class="sr-only">Actions</span></th>
+          <th scope="col">${tx('Scam')}</th><th scope="col">${tx('Town')}</th><th scope="col">${tx('Status')}</th>
+          <th scope="col" class="num">${tx('Neighbours hit')}</th><th scope="col"><span class="sr-only">${tx('Actions')}</span></th>
         </tr></thead>
         <tbody>
           ${reports.map(r => `
             <tr id="rep-${esc(r.id)}">
               <td class="r-main">
-                <span class="r-title">${esc(r.title)}</span>
-                <span class="r-detail">${esc(r.type)} · ${esc(r.channel)} · ${timeAgo(r.created)}</span>
-                ${r.desc ? `<span class="r-desc">${nl2br(r.desc)}</span>` : ''}
-                ${r.image ? `<img class="r-img" src="${esc(r.image)}" alt="Screenshot attached to this report">` : ''}
+                <span class="r-title">${written(r.title)}</span>
+                <span class="r-detail">${tx(r.type)} · ${tx(r.channel)} · ${timeAgo(r.created)}</span>
+                ${r.desc ? `<span class="r-desc">${written(r.desc, { br: true })}</span>` : ''}
+                ${r.image ? `<img class="r-img" src="${esc(r.image)}" alt="${tx('Screenshot attached to this report')}">` : ''}
               </td>
-              <td data-label="Town">${esc(r.town)}</td>
-              <td data-label="Status"><span class="r-status">${STATUS_TAG[r.status](r)}</span></td>
-              <td class="num" data-label="Neighbours hit"><span class="r-count">${r.count}</span></td>
+              <td data-label="${tx('Town')}">${esc(placeName(r.town))}</td>
+              <td data-label="${tx('Status')}"><span class="r-status">${STATUS_TAG[r.status](r)}</span></td>
+              <td class="num" data-label="${tx('Neighbours hit')}"><span class="r-count">${r.count}</span></td>
               <td class="r-actions">
-                <button type="button" class="btn ${r.mine ? 'btn-primary' : 'btn-secondary'}" data-confirm="${esc(r.id)}" aria-pressed="${r.mine}">${r.mine ? 'You got this too' : 'I got this too'}</button>
-                <button type="button" class="btn btn-ghost" data-discuss="${esc(r.id)}">Discuss</button>
-                ${r.status !== 'verified' ? `<button type="button" class="btn btn-primary vol-only" data-verify="${esc(r.id)}">Verify</button>` : ''}
-                ${r.status !== 'rumour' ? `<button type="button" class="btn btn-ghost vol-only" data-rumour="${esc(r.id)}">Not a scam wave</button>` : ''}
-                ${r.status === 'verified' ? `<button type="button" class="btn btn-ghost vol-only" data-drillfrom="${esc(r.id)}">Make it this week’s drill</button>` : ''}
+                <button type="button" class="btn ${r.mine ? 'btn-primary' : 'btn-secondary'}" data-confirm="${esc(r.id)}" aria-pressed="${r.mine}">${r.mine ? tx('You got this too') : tx('I got this too')}</button>
+                <button type="button" class="btn btn-ghost" data-discuss="${esc(r.id)}">${tx('Discuss')}</button>
+                ${r.status !== 'verified' ? `<button type="button" class="btn btn-primary vol-only" data-verify="${esc(r.id)}">${tx('Verify')}</button>` : ''}
+                ${r.status !== 'rumour' ? `<button type="button" class="btn btn-ghost vol-only" data-rumour="${esc(r.id)}">${tx('Not a scam wave')}</button>` : ''}
+                ${r.status === 'verified' ? `<button type="button" class="btn btn-ghost vol-only" data-drillfrom="${esc(r.id)}">${tx('Make it this week’s drill')}</button>` : ''}
               </td>
             </tr>`).join('')}
         </tbody>
@@ -2339,25 +2186,25 @@
     run('verify', async id => {
       upsert(cache.reports, await api.post(`/reports/${id}/verify`));
       updateRadar();
-      toast('Report verified. Residents in that town are being alerted.', 'ok');
+      toast(t('Report verified. Residents in that town are being alerted.'), 'ok');
     });
     run('drillfrom', async id => {
       const res = await api.post('/drills/estate', { reportId: decodeURIComponent(id) });
       toast(res.sent
-        ? `Practice scam sent to ${res.sent} Circle${res.sent === 1 ? '' : 's'} in ${res.town}. Results show on the Pause page.`
-        : `No Circles in ${res.town} are waiting for a drill right now.`, res.sent ? 'ok' : 'info', { link: '#/pause', linkText: 'Open Pause' });
+        ? t(res.sent === 1 ? 'Practice scam sent to {n} Circle in {town}. Results show on the Pause page.' : 'Practice scam sent to {n} Circles in {town}. Results show on the Pause page.', { n: res.sent, town: res.town })
+        : t('No Circles in {town} are waiting for a drill right now.', { town: res.town }), res.sent ? 'ok' : 'info', { link: '#/pause', linkText: t('Open Pause') });
     });
     run('rumour', async id => {
       upsert(cache.reports, await api.post(`/reports/${id}/dismiss`));
       updateRadar();
-      toast('Marked as checked: not a scam wave.');
+      toast(t('Marked as checked: not a scam wave.'));
     });
   }
 
   function initMap() {
     const el = $('#map');
     if (!window.L) {
-      el.innerHTML = '<p class="map-fallback">The map couldn’t load (are you offline?). The reports below still work.</p>';
+      el.innerHTML = `<p class="map-fallback">${tx('The map couldn’t load (are you offline?). The reports below still work.')}</p>`;
       return;
     }
     // OneMap (Singapore Land Authority): Singapore's official basemap, free with attribution,
@@ -2407,30 +2254,30 @@
         className: g.fresh ? 'pulse' : ''
       }).bindPopup(`
         <div class="map-pop">
-          <p class="map-pop-title">${esc(town)}</p>
-          <p class="muted">${g.reports.length} report${g.reports.length === 1 ? '' : 's'} · ${g.residents} neighbours hit</p>
-          <ul>${g.reports.slice(0, 3).map(r => `<li>${esc(r.title)}</li>`).join('')}</ul>
-          <button type="button" class="btn btn-primary" data-town="${esc(town)}">Show ${esc(town)} reports</button>
+          <p class="map-pop-title">${esc(placeName(town))}</p>
+          <p class="muted">${tx(g.reports.length === 1 ? '{n} report' : '{n} reports', { n: g.reports.length })} · ${tx('{n} neighbours hit', { n: g.residents })}</p>
+          <ul>${g.reports.slice(0, 3).map(r => `<li>${written(r.title)}</li>`).join('')}</ul>
+          <button type="button" class="btn btn-primary" data-town="${esc(town)}">${tx('Show {town} reports', { town })}</button>
         </div>`).addTo(markerLayer);
     });
   }
 
   function openReportModal(prefill = {}) {
     openModal({
-      title: 'Report a scam',
+      title: t('Report a scam'),
       wide: true,
       body: `
         <form id="reportForm" class="form-grid">
-          <p class="muted full">Your report is anonymous. A CC or RC volunteer checks it before it’s shown as a verified scam wave.</p>
-          <div class="field"><label for="rTown">Your town</label><select id="rTown" class="input" required>${townOptions(prefs.subscription.town || '', true, 'Choose your town')}</select></div>
-          <div class="field"><label for="rChannel">How did it reach you?</label><select id="rChannel" class="input">${KW.CHANNELS.map(c => `<option ${c === prefill.channel ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
-          <div class="field full"><label for="rType">Type of scam</label><select id="rType" class="input">${KW.SCAM_TYPES.map(t => `<option>${esc(t)}</option>`).join('')}</select></div>
-          <div class="field full"><label for="rTitle">Short summary</label><input id="rTitle" class="input" required maxlength="120" placeholder="For example: fake parcel SMS asking for $1.99"></div>
-          <div class="field full"><label for="rDesc">What happened?</label><textarea id="rDesc" class="input" rows="4" maxlength="2000" placeholder="What did the message or caller say or ask for? Leave out your own personal details.">${esc(prefill.desc || '')}</textarea></div>
-          ${imageField('rImg', 'Screenshot (optional)', prefill.image)}
+          <p class="muted full">${tx('Your report is anonymous. A CC or RC volunteer checks it before it’s shown as a verified scam wave.')}</p>
+          <div class="field"><label for="rTown">${tx('Your town')}</label><select id="rTown" class="input" required>${townOptions(prefs.subscription.town || '', true, t('Choose your town'))}</select></div>
+          <div class="field"><label for="rChannel">${esc(say('channel'))}</label><select id="rChannel" class="input">${KW.CHANNELS.map(c => `<option value="${esc(c)}" ${c === prefill.channel ? 'selected' : ''}>${tx(c)}</option>`).join('')}</select></div>
+          <div class="field full"><label for="rType">${tx('Type of scam')}</label><select id="rType" class="input">${KW.SCAM_TYPES.map(ty => `<option value="${esc(ty)}">${tx(ty)}</option>`).join('')}</select></div>
+          <div class="field full"><label for="rTitle">${tx('Short summary')}</label><input id="rTitle" class="input" required maxlength="120" placeholder="${tx('For example: fake parcel SMS asking for $1.99')}"></div>
+          <div class="field full"><label for="rDesc">${tx('What happened?')}</label><textarea id="rDesc" class="input" rows="4" maxlength="2000" placeholder="${tx('What did the message or caller say or ask for? Leave out your own personal details.')}">${esc(prefill.desc || '')}</textarea></div>
+          ${imageField('rImg', t('Screenshot (optional)'), prefill.image)}
           <div class="full form-actions">
-            <button type="button" class="btn btn-secondary" data-close>Cancel</button>
-            <button type="submit" class="btn btn-primary">Send report</button>
+            <button type="button" class="btn btn-secondary" data-close>${tx('Cancel')}</button>
+            <button type="submit" class="btn btn-primary">${tx('Send report')}</button>
           </div>
         </form>`,
       onMount: body => {
@@ -2440,7 +2287,7 @@
           e.preventDefault();
           const town = $('#rTown', body).value;
           const title = $('#rTitle', body).value.trim();
-          if (!town || !title) { toast('Please choose your town and add a short summary.', 'warn'); return; }
+          if (!town || !title) { toast(t('Please choose your town and add a short summary.'), 'warn'); return; }
           act(e.submitter, async () => {
             const r = await api.post('/reports', {
               town, title,
@@ -2452,8 +2299,8 @@
             upsert(cache.reports, r);
             closeModal();
             toast(isVolunteer()
-              ? 'Report sent. As a volunteer you can verify it in the list.'
-              : 'Thank you. A CC or RC volunteer will check your report.', 'ok');
+              ? t('Report sent. As a volunteer you can verify it in the list.')
+              : t('Thank you. A CC or RC volunteer will check your report.'), 'ok');
             if (current.route === 'radar') { radarFilter.town = ''; drawRadarPage(); }
             else location.hash = '#/radar';
           });
@@ -2467,9 +2314,9 @@
     banner.className = 'alert-banner';
     banner.innerHTML = `
       <div class="alert-inner">
-        <p><strong>Scam alert for ${esc(r.town)}.</strong> ${esc(r.title)}</p>
-        <a class="btn btn-secondary" href="#/radar" id="alertView">View</a>
-        <button type="button" class="btn btn-ghost" id="alertClose">Dismiss</button>
+        <p><strong>${tx('Scam alert for {town}.', { town: r.town })}</strong> ${esc(r.title)}</p>
+        <a class="btn btn-secondary" href="#/radar" id="alertView">${tx('View')}</a>
+        <button type="button" class="btn btn-ghost" id="alertClose">${tx('Dismiss')}</button>
       </div>`;
     banner.hidden = false;
     $('#alertClose').addEventListener('click', () => { banner.hidden = true; });
@@ -2479,7 +2326,7 @@
       if (current.route === 'radar') drawRadarPage();
     });
     if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-      try { new Notification('Kampung Watch: scam alert for ' + r.town, { body: r.title }); } catch (e) { /* ignore */ }
+      try { new Notification(t('Kampung Watch: scam alert for {town}', { town: r.town }), { body: r.title }); } catch (e) { /* ignore */ }
     }
   }
 
@@ -2505,7 +2352,7 @@
     const count = fid => postCounts ? (fid === 'all' ? postCounts.total : postCounts.byFlair[fid] || 0) : '';
     const topic = (fid, label) => `
       <li><button type="button" class="cm-topic" data-flair="${fid}" aria-pressed="${communityView.flair === fid}">
-        <span>${esc(noEmoji(label))}</span><span class="cm-topic-n" aria-label="${count(fid)} posts">${count(fid)}</span>
+        <span>${tx(noEmoji(label))}</span><span class="cm-topic-n" aria-label="${tx('{n} posts', { n: count(fid) })}">${count(fid)}</span>
       </button></li>`;
 
     main.innerHTML = `
@@ -2513,32 +2360,33 @@
         <header class="cm-head">
           <div class="cm-head-inner">
             <div class="cm-head-text">
-              <p class="cm-eyebrow">Kopitiam talk${postCounts ? ` · ${postCounts.total} discussion${postCounts.total === 1 ? '' : 's'}` : ''}</p>
-              <h1 class="cm-title">Community</h1>
-              <p class="cm-desc">Ask about a strange message, warn your block, and learn from neighbours. Volunteer answers are marked.</p>
+              <p class="cm-eyebrow">${tx('Kopitiam talk')}${postCounts ? ` · ${tx(postCounts.total === 1 ? '{n} discussion' : '{n} discussions', { n: postCounts.total })}` : ''}</p>
+              <h1 class="cm-title">${tx('Community')}</h1>
+              <p class="cm-desc">${tx('Ask about a strange message, warn your block, and learn from neighbours. Volunteer answers are marked.')}</p>
+              ${writtenNote()}
             </div>
-            <button type="button" class="btn btn-primary btn-lg cm-new" id="newPostBtn">New post</button>
+            <button type="button" class="btn btn-primary btn-lg cm-new" id="newPostBtn">${tx('New post')}</button>
           </div>
         </header>
 
         <div class="cm-body">
           <nav class="cm-topics" aria-labelledby="topicsTitle">
-            <h2 class="kicker" id="topicsTitle">Topics</h2>
+            <h2 class="kicker" id="topicsTitle">${tx('Topics')}</h2>
             <ul class="cm-topic-list" role="list">
               ${topic('all', 'All posts')}
               ${KW.FLAIRS.map(f => topic(f.id, f.label)).join('')}
             </ul>
           </nav>
 
-          <section class="cm-feed" aria-label="Posts">
+          <section class="cm-feed" aria-label="${tx('Posts')}">
             <div class="cm-toolbar">
-              <div class="seg" role="radiogroup" aria-label="Sort posts">
+              <div class="seg" role="radiogroup" aria-label="${tx('Sort posts')}">
                 ${[['hot', 'Hot'], ['new', 'New'], ['top', 'Top']].map(([s, label]) => `
-                  <label class="seg-opt"><input type="radio" name="postSort" value="${s}" ${communityView.sort === s ? 'checked' : ''}>${label}</label>`).join('')}
+                  <label class="seg-opt"><input type="radio" name="postSort" value="${s}" ${communityView.sort === s ? 'checked' : ''}>${tx(label)}</label>`).join('')}
               </div>
               <div class="cm-search">
-                <label for="postSearch" class="sr-only">Search posts</label>
-                <input type="search" id="postSearch" placeholder="Search posts" value="${esc(communityView.q)}">
+                <label for="postSearch" class="sr-only">${tx('Search posts')}</label>
+                <input type="search" id="postSearch" placeholder="${tx('Search posts')}" value="${esc(communityView.q)}">
               </div>
             </div>
             <div id="postList"></div>
@@ -2546,19 +2394,19 @@
 
           <aside class="cm-side">
             <section aria-labelledby="rulesTitle">
-              <h2 class="cm-side-title" id="rulesTitle">House rules</h2>
+              <h2 class="cm-side-title" id="rulesTitle">${tx('House rules')}</h2>
               <ol class="cm-side-list" role="list">
-                <li><strong>Hide personal details.</strong> Phone numbers, NRIC numbers and addresses stay out of posts.</li>
-                <li><strong>Be kind.</strong> Anyone can be targeted. Nobody gets scolded here.</li>
-                <li><strong>No selling, no strange links.</strong> Posts with unknown links are removed.</li>
-                <li><strong>Need an answer fast?</strong> <a href="#/ask">Ask a volunteer privately</a> instead.</li>
+                <li>${th('{b}Hide personal details.{/b} Phone numbers, NRIC numbers and addresses stay out of posts.', { b: '<strong>', '/b': '</strong>' })}</li>
+                <li>${th('{b}Be kind.{/b} Anyone can be targeted. Nobody gets scolded here.', { b: '<strong>', '/b': '</strong>' })}</li>
+                <li>${th('{b}No selling, no strange links.{/b} Posts with unknown links are removed.', { b: '<strong>', '/b': '</strong>' })}</li>
+                <li>${th('{b}Need an answer fast?{/b} {a}Ask a volunteer privately{/a} instead.', { b: '<strong>', '/b': '</strong>', a: '<a href="#/ask">', '/a': '</a>' })}</li>
               </ol>
             </section>
             <section aria-labelledby="helpersTitle">
-              <h2 class="cm-side-title" id="helpersTitle">Volunteers answering</h2>
+              <h2 class="cm-side-title" id="helpersTitle">${tx('Volunteers answering')}</h2>
               <ul class="cm-side-list" role="list">
                 ${KW.VOLUNTEERS.slice(0, 5).map(v => `
-                  <li><span class="cm-helper">${esc(v.name)}</span><span class="cm-helper-meta">${esc(v.role)} · ${esc(v.area)} · ${esc(v.langs)}</span></li>`).join('')}
+                  <li><span class="cm-helper">${esc(v.name)}</span><span class="cm-helper-meta">${tx(v.role)} · ${esc(placeName(v.area))} · ${langList(v.langs)}</span></li>`).join('')}
               </ul>
             </section>
           </aside>
@@ -2593,7 +2441,7 @@
       renderPostList();
     } catch (err) {
       if (seq) throw err;
-      toast(err.message === 'offline' ? 'Can’t reach the server.' : err.message, 'warn');
+      toast(err.message === 'offline' ? t('Can’t reach the server.') : err.message, 'warn');
     }
   }
 
@@ -2601,7 +2449,7 @@
     const list = $('#postList');
     if (!list) return;
     list.innerHTML = cache.posts.length ? cache.posts.map(postItem).join('')
-      : `<div class="empty"><p>No posts here yet. Be the first to start the conversation.</p></div>`;
+      : `<div class="empty"><p>${tx('No posts here yet. Be the first to start the conversation.')}</p></div>`;
     const update = updated => {
       const i = cache.posts.findIndex(x => x.id === updated.id);
       if (i >= 0) cache.posts[i] = { ...cache.posts[i], ...updated };
@@ -2623,7 +2471,7 @@
     if (navigator.share) {
       navigator.share({ title, text: `Kampung Watch: ${title}`, url }).catch(() => { /* closed the share sheet */ });
     } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(url).then(() => toast('Link copied. Paste it into your block’s chat group.', 'ok'));
+      navigator.clipboard.writeText(url).then(() => toast(t('Link copied. Paste it into your block’s chat group.'), 'ok'));
     } else {
       toast(url);
     }
@@ -2631,12 +2479,11 @@
 
   /* Text-only voting: "Upvote · 42 points · Downvote". */
   function voteBox(kind, id, score, mine) {
-    const what = kind === 'post' ? 'post' : 'comment';
     return `
-      <span class="vote" role="group" aria-label="Vote on this ${what}">
-        <button type="button" class="btn btn-ghost" data-vote="1" data-kind="${kind}" data-id="${esc(id)}" data-mine="${mine}" aria-pressed="${mine === 1}">Upvote</button>
-        <span class="vote-score">${score} point${Math.abs(score) === 1 ? '' : 's'}</span>
-        <button type="button" class="btn btn-ghost" data-vote="-1" data-kind="${kind}" data-id="${esc(id)}" data-mine="${mine}" aria-pressed="${mine === -1}">Downvote</button>
+      <span class="vote" role="group" aria-label="${kind === 'post' ? tx('Vote on this post') : tx('Vote on this comment')}">
+        <button type="button" class="btn btn-ghost" data-vote="1" data-kind="${kind}" data-id="${esc(id)}" data-mine="${mine}" aria-pressed="${mine === 1}">${tx('Upvote')}</button>
+        <span class="vote-score">${tx(Math.abs(score) === 1 ? '{n} point' : '{n} points', { n: score })}</span>
+        <button type="button" class="btn btn-ghost" data-vote="-1" data-kind="${kind}" data-id="${esc(id)}" data-mine="${mine}" aria-pressed="${mine === -1}">${tx('Downvote')}</button>
       </span>`;
   }
 
@@ -2653,16 +2500,16 @@
   function verdictTag(p) {
     if (!p.verdict) return '';
     return p.verdict.result === 'scam'
-      ? `<span class="tag tag-accent-2">Verified scam</span>`
-      : `<span class="tag tag-accent">Verified legit</span>`;
+      ? `<span class="tag tag-accent-2">${tx('Verified scam')}</span>`
+      : `<span class="tag tag-accent">${tx('Verified legit')}</span>`;
   }
 
   /* Topic tag, "author · role · time", then the volunteer verdict. */
   function postMeta(p) {
     return `
       <p class="post-meta">
-        <span class="tag ${FLAIR_TAG[p.flair] || 'tag-neutral'}">${esc(noEmoji(flairLabel(p.flair)))}</span>
-        <span class="post-by">${esc(p.author)}${p.authorRole ? ` · ${esc(p.authorRole)}` : ''} · ${timeAgo(p.created)}</span>
+        <span class="tag ${FLAIR_TAG[p.flair] || 'tag-neutral'}">${tx(noEmoji(flairLabel(p.flair)))}</span>
+        <span class="post-by">${esc(authorName(p.author))}${p.authorRole ? ` · ${tx(p.authorRole)}` : ''} · ${timeAgo(p.created)}</span>
         ${verdictTag(p)}
       </p>`;
   }
@@ -2674,16 +2521,16 @@
     const total = p.poll.options.reduce((a, o) => a + o.votes, 0);
     const mine = p.poll.myChoice;
     return `
-      <div class="cm-poll" role="group" aria-label="${p.flair === 'ask' ? 'What neighbours think' : 'Where neighbours stand'}">
+      <div class="cm-poll" role="group" aria-label="${p.flair === 'ask' ? tx('What neighbours think') : tx('Where neighbours stand')}">
         ${p.poll.options.map((o, i) => {
           const pct = total ? Math.round(o.votes / total * 100) : 0;
           return `
             <button type="button" class="cm-poll-opt ${mine === i ? 'chosen' : ''}" data-listpoll="${i}" data-post="${esc(p.id)}" aria-pressed="${mine === i}">
-              <span class="cm-poll-row"><span>${esc(noEmoji(o.label))}</span><span class="cm-poll-pct">${pct}%</span></span>
+              <span class="cm-poll-row"><span>${label(noEmoji(o.label))}</span><span class="cm-poll-pct">${pct}%</span></span>
               <span class="cm-poll-track" aria-hidden="true"><span class="cm-poll-bar ${isScamOption(o.label) ? 'is-scam' : ''}" style="width:${pct}%"></span></span>
             </button>`;
         }).join('')}
-        <p class="cm-poll-note">${total} vote${total === 1 ? '' : 's'}${mine == null ? ' · tap an answer to vote' : ' · tap your answer again to take it back'}</p>
+        <p class="cm-poll-note">${tx(total === 1 ? '{n} vote' : '{n} votes', { n: total })} · ${mine == null ? tx('tap an answer to vote') : tx('tap your answer again to take it back')}</p>
       </div>`;
   }
 
@@ -2695,20 +2542,20 @@
     const replies = p.commentCount;
     return `
       <article class="cm-post">
-        <div class="cm-vote" role="group" aria-label="Vote on this post">
-          <button type="button" class="cm-vote-btn" data-vote="1" data-kind="post" data-id="${esc(p.id)}" data-mine="${p.myVote}" aria-pressed="${p.myVote === 1}" aria-label="Upvote">${chevron(true)}</button>
-          <span class="cm-score" aria-label="${p.score} points">${p.score}</span>
-          <button type="button" class="cm-vote-btn" data-vote="-1" data-kind="post" data-id="${esc(p.id)}" data-mine="${p.myVote}" aria-pressed="${p.myVote === -1}" aria-label="Downvote">${chevron(false)}</button>
+        <div class="cm-vote" role="group" aria-label="${tx('Vote on this post')}">
+          <button type="button" class="cm-vote-btn" data-vote="1" data-kind="post" data-id="${esc(p.id)}" data-mine="${p.myVote}" aria-pressed="${p.myVote === 1}" aria-label="${tx('Upvote')}">${chevron(true)}</button>
+          <span class="cm-score" aria-label="${tx(Math.abs(p.score) === 1 ? '{n} point' : '{n} points', { n: p.score })}">${p.score}</span>
+          <button type="button" class="cm-vote-btn" data-vote="-1" data-kind="post" data-id="${esc(p.id)}" data-mine="${p.myVote}" aria-pressed="${p.myVote === -1}" aria-label="${tx('Downvote')}">${chevron(false)}</button>
         </div>
         <div class="cm-post-body">
           ${postMeta(p)}
-          <h2 class="cm-post-title"><a href="#/community/post/${esc(p.id)}">${esc(noEmoji(p.title))}</a></h2>
-          ${excerpt ? `<p class="cm-excerpt">${nl2br(excerpt)}</p>` : ''}
-          ${p.image ? `<img class="post-thumb" src="${esc(p.image)}" alt="Image attached to this post">` : ''}
+          <h2 class="cm-post-title"><a href="#/community/post/${esc(p.id)}">${written(noEmoji(p.title))}</a></h2>
+          ${excerpt ? `<p class="cm-excerpt">${written(excerpt, { br: true })}</p>` : ''}
+          ${p.image ? `<img class="post-thumb" src="${esc(p.image)}" alt="${tx('Image attached to this post')}">` : ''}
           ${p.poll ? listPollHTML(p) : ''}
           <div class="cm-actions">
-            <a class="btn btn-ghost" href="#/community/post/${esc(p.id)}">${replies} repl${replies === 1 ? 'y' : 'ies'}</a>
-            <button type="button" class="btn btn-ghost" data-share="${esc(p.id)}">Share to my block</button>
+            <a class="btn btn-ghost" href="#/community/post/${esc(p.id)}">${tx(replies === 1 ? '{n} reply' : '{n} replies', { n: replies })}</a>
+            <button type="button" class="btn btn-ghost" data-share="${esc(p.id)}">${tx('Share to my block')}</button>
           </div>
         </div>
       </article>`;
@@ -2746,9 +2593,9 @@
       main.innerHTML = `
         <div class="page">
           <div class="error-block">
-            <p class="kicker">Community</p>
-            <h1 class="display">That post doesn’t exist anymore.</h1>
-            <a class="btn btn-primary btn-lg" href="#/community">Back to Community</a>
+            <p class="kicker">${tx('Community')}</p>
+            <h1 class="display">${tx('That post doesn’t exist anymore.')}</h1>
+            <a class="btn btn-primary btn-lg" href="#/community">${tx('Back to Community')}</a>
           </div>
         </div>`;
       return;
@@ -2757,38 +2604,39 @@
     const commentCount = p.commentCount;
     main.innerHTML = `
       <div class="page post-page">
-        <a class="btn btn-ghost back-link" href="#/community">Back to Community</a>
+        <a class="btn btn-ghost back-link" href="#/community">${tx('Back to Community')}</a>
+        ${writtenNote()}
         <article class="post-full">
           ${postMeta(p)}
-          <h1 class="display display-sm">${esc(noEmoji(p.title))}</h1>
-          ${p.body ? `<p class="post-body">${nl2br(noEmoji(p.body))}</p>` : ''}
-          ${p.image ? `<img class="post-img" src="${esc(p.image)}" alt="Image attached to this post">` : ''}
+          <h1 class="display display-sm">${written(noEmoji(p.title))}</h1>
+          ${p.body ? `<p class="post-body">${written(noEmoji(p.body), { br: true })}</p>` : ''}
+          ${p.image ? `<img class="post-img" src="${esc(p.image)}" alt="${tx('Image attached to this post')}">` : ''}
           <div class="post-actions">${voteBox('post', p.id, p.score, p.myVote)}</div>
           ${p.flair === 'ask' && p.body ? `
             <details class="post-check">
-              <summary>Run the red-flag check on this message</summary>
+              <summary>${tx('Run the red-flag check on this message')}</summary>
               <div class="post-check-body">${flagsHTML(p.body)}</div>
             </details>` : ''}
           ${p.poll ? pollHTML(p) : ''}
-          ${p.verdict ? `<p class="muted">Verdict given by ${esc(p.verdict.by)}.</p>` : ''}
-          <div class="vol-only verdict-row" role="group" aria-label="Volunteer verdict">
-            <span class="muted">Volunteer verdict:</span>
-            <button type="button" class="btn ${p.verdict && p.verdict.result === 'scam' ? 'btn-primary' : 'btn-secondary'}" data-pverdict="scam">Scam</button>
-            <button type="button" class="btn ${p.verdict && p.verdict.result === 'legit' ? 'btn-primary' : 'btn-secondary'}" data-pverdict="legit">Legit</button>
-            ${p.verdict ? `<button type="button" class="btn btn-ghost" data-pverdict="">Clear</button>` : ''}
+          ${p.verdict ? `<p class="muted">${tx('Verdict given by {name}.', { name: p.verdict.by })}</p>` : ''}
+          <div class="vol-only verdict-row" role="group" aria-label="${tx('Volunteer verdict')}">
+            <span class="muted">${tx('Volunteer verdict:')}</span>
+            <button type="button" class="btn ${p.verdict && p.verdict.result === 'scam' ? 'btn-primary' : 'btn-secondary'}" data-pverdict="scam">${tx('Scam')}</button>
+            <button type="button" class="btn ${p.verdict && p.verdict.result === 'legit' ? 'btn-primary' : 'btn-secondary'}" data-pverdict="legit">${tx('Legit')}</button>
+            ${p.verdict ? `<button type="button" class="btn btn-ghost" data-pverdict="">${tx('Clear')}</button>` : ''}
           </div>
         </article>
 
         <section class="comments" aria-labelledby="commentsTitle">
-          <h2 class="section-title" id="commentsTitle">${commentCount} comment${commentCount === 1 ? '' : 's'}</h2>
+          <h2 class="section-title" id="commentsTitle">${tx(commentCount === 1 ? '{n} comment' : '{n} comments', { n: commentCount })}</h2>
           <form class="comment-form" id="commentForm">
             <div class="field">
-              <label for="commentText">Commenting as ${esc(vol ? prefs.volunteer.name + ' (Volunteer)' : (cache.me ? cache.me.handle : 'a resident'))}</label>
-              <textarea id="commentText" class="input" rows="3" maxlength="3000" placeholder="${vol ? 'Answer as a volunteer' : 'Share your thoughts or advice'}"></textarea>
+              <label for="commentText">${tx('Commenting as {name}', { name: vol ? `${prefs.volunteer.name} (${t('Volunteer')})` : (cache.me ? cache.me.handle : t('a resident')) })}</label>
+              <textarea id="commentText" class="input" rows="3" maxlength="3000" placeholder="${vol ? tx('Answer as a volunteer') : tx('Share your thoughts or advice')}"></textarea>
             </div>
-            <div class="btn-row"><button type="submit" class="btn btn-primary">Post comment</button></div>
+            <div class="btn-row"><button type="submit" class="btn btn-primary">${tx('Post comment')}</button></div>
           </form>
-          <div class="comment-tree">${p.comments.length ? commentsHTML(p.comments, 0) : '<p class="muted">No comments yet. Be the first to help.</p>'}</div>
+          <div class="comment-tree">${p.comments.length ? commentsHTML(p.comments, 0) : `<p class="muted">${tx('No comments yet. Be the first to help.')}</p>`}</div>
         </section>
       </div>`;
 
@@ -2846,17 +2694,17 @@
       <div class="comment ${depth ? 'nested' : ''}">
         <p class="comment-head">
           <span class="comment-author">${esc(c.author)}</span>
-          ${c.role ? `<span class="tag tag-accent">${esc(c.role)}</span>` : ''}
+          ${c.role ? `<span class="tag tag-accent">${tx(c.role)}</span>` : ''}
           <span class="muted">${timeAgo(c.created)}</span>
         </p>
-        <p class="comment-body">${nl2br(c.body)}</p>
+        <p class="comment-body">${written(c.body, { br: true })}</p>
         <div class="comment-actions">
           ${voteBox('comment', c.id, c.score, c.myVote)}
-          <button type="button" class="btn btn-ghost" data-reply="${esc(c.id)}" aria-expanded="false" aria-controls="rf-${esc(c.id)}">Reply</button>
+          <button type="button" class="btn btn-ghost" data-reply="${esc(c.id)}" aria-expanded="false" aria-controls="rf-${esc(c.id)}">${tx('Reply')}</button>
         </div>
         <form class="reply-inline" id="rf-${esc(c.id)}" data-parent="${esc(c.id)}" hidden>
-          <textarea class="input" rows="2" maxlength="3000" aria-label="Reply to ${esc(c.author)}" placeholder="Write a reply"></textarea>
-          <button type="submit" class="btn btn-primary">Reply</button>
+          <textarea class="input" rows="2" maxlength="3000" aria-label="${tx('Reply to {name}', { name: c.author })}" placeholder="${tx('Write a reply')}"></textarea>
+          <button type="submit" class="btn btn-primary">${tx('Reply')}</button>
         </form>
         ${c.replies && c.replies.length ? `<div class="replies">${commentsHTML(c.replies, depth + 1)}</div>` : ''}
       </div>`).join('');
@@ -2867,14 +2715,14 @@
     const total = p.poll.options.reduce((a, o) => a + o.votes, 0) || 1;
     return `
       <section class="poll" aria-labelledby="pollTitle">
-        <h2 class="kicker" id="pollTitle">${p.flair === 'ask' ? 'What the community thinks' : 'Where do you stand?'}</h2>
-        <p class="muted">${mine == null ? 'Tap an answer to vote.' : 'Tap your answer again to take back your vote.'}</p>
+        <h2 class="kicker" id="pollTitle">${p.flair === 'ask' ? tx('What the community thinks') : tx('Where do you stand?')}</h2>
+        <p class="muted">${mine == null ? tx('Tap an answer to vote.') : tx('Tap your answer again to take back your vote.')}</p>
         ${p.poll.options.map((o, i) => {
           const pct = Math.round(o.votes / total * 100);
           return `
             <button type="button" class="poll-opt ${mine === i ? 'chosen' : ''}" data-poll="${i}" aria-pressed="${mine === i}">
               <span class="poll-bar" style="width:${pct}%"></span>
-              <span class="poll-label">${esc(noEmoji(o.label))}</span>
+              <span class="poll-label">${label(noEmoji(o.label))}</span>
               <span class="poll-pct">${pct}%</span>
             </button>`;
         }).join('')}
@@ -2883,21 +2731,21 @@
 
   function openPostModal(prefill = {}) {
     openModal({
-      title: 'New post',
+      title: t('New post'),
       wide: true,
       body: `
         <form id="postForm" class="form-grid">
-          <div class="field full"><label for="pFlair">Topic</label>
-            <select id="pFlair" class="input">${KW.FLAIRS.map(f => `<option value="${f.id}" ${f.id === prefill.flair ? 'selected' : ''}>${esc(f.label)}</option>`).join('')}</select>
+          <div class="field full"><label for="pFlair">${tx('Topic')}</label>
+            <select id="pFlair" class="input">${KW.FLAIRS.map(f => `<option value="${f.id}" ${f.id === prefill.flair ? 'selected' : ''}>${tx(f.label)}</option>`).join('')}</select>
           </div>
-          <div class="field full"><label for="pTitle">Title</label><input id="pTitle" class="input" maxlength="140" required placeholder="For example: is this WhatsApp job offer a scam?" value="${esc(prefill.title || '')}"></div>
-          <div class="field full"><label for="pBody">Details</label><textarea id="pBody" class="input" rows="6" maxlength="5000" placeholder="Paste the message or tell your story. Hide phone numbers and personal details."></textarea></div>
+          <div class="field full"><label for="pTitle">${tx('Title')}</label><input id="pTitle" class="input" maxlength="140" required placeholder="${tx('For example: is this WhatsApp job offer a scam?')}" value="${esc(prefill.title || '')}"></div>
+          <div class="field full"><label for="pBody">${tx('Details')}</label><textarea id="pBody" class="input" rows="6" maxlength="5000" placeholder="${tx('Paste the message or tell your story. Hide phone numbers and personal details.')}"></textarea></div>
           <div class="full" id="pFlags" aria-live="polite"></div>
-          ${imageField('pImg', 'Photo or screenshot (optional)')}
+          ${imageField('pImg', t('Photo or screenshot (optional)'))}
           <p class="full muted" id="pPollNote"></p>
           <div class="full form-actions">
-            <button type="button" class="btn btn-secondary" data-close>Cancel</button>
-            <button type="submit" class="btn btn-primary">Post</button>
+            <button type="button" class="btn btn-secondary" data-close>${tx('Cancel')}</button>
+            <button type="submit" class="btn btn-primary">${tx('Post')}</button>
           </div>
         </form>`,
       onMount: body => {
@@ -2909,8 +2757,8 @@
           const note = $('#pPollNote', body);
           note.hidden = !['ask', 'debate'].includes(flair.value);
           note.textContent = flair.value === 'debate'
-            ? 'A poll (Agree, Disagree, It depends) is added automatically.'
-            : 'A community poll (Scam, Looks legit, Not sure) is added automatically.';
+            ? t('A poll (Agree, Disagree, It depends) is added automatically.')
+            : t('A community poll (Scam, Looks legit, Not sure) is added automatically.');
         };
         flair.addEventListener('change', update);
         text.addEventListener('input', update);
@@ -2918,11 +2766,11 @@
         $('#postForm', body).addEventListener('submit', e => {
           e.preventDefault();
           const title = $('#pTitle', body).value.trim();
-          if (!title) { toast('Please add a title.', 'warn'); return; }
+          if (!title) { toast(t('Please add a title.'), 'warn'); return; }
           act(e.submitter, async () => {
             const post = await api.post('/posts', { flair: flair.value, title, body: text.value, image: getImg() });
             closeModal();
-            toast('Posted. Neighbours and volunteers can now reply.', 'ok');
+            toast(t('Posted. Neighbours and volunteers can now reply.'), 'ok');
             location.hash = '#/community/post/' + post.id;
           });
         });
@@ -2941,14 +2789,14 @@
     return { ...p, pct: Math.round(doneSteps / steps * 100) };
   }
 
-  function progressBar(pct, label = 'Course progress') {
+  function progressBar(pct, label = t('Course progress')) {
     return `<div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${esc(label)}"><span style="width:${pct}%"></span></div>`;
   }
 
   function progressWords(p, course) {
-    if (p.passed) return 'Passed';
-    if (p.done.length) return `${p.done.length} of ${course.lessons.length} lessons done`;
-    return 'Not started';
+    if (p.passed) return t('Passed');
+    if (p.done.length) return t('{n} of {total} lessons done', { n: p.done.length, total: course.lessons.length });
+    return t('Not started');
   }
 
   const passMark = course => Math.ceil(course.quiz.length * 2 / 3); // two-thirds, e.g. 2 of 3
@@ -2979,7 +2827,7 @@
     const levels = [...new Set(KW.COURSES.map(c => c.level))];
     const filter = (st, label) => `
       <li><button type="button" class="cm-topic" data-status="${st}" aria-pressed="${learnView.status === st}">
-        <span>${label}</span><span class="cm-topic-n" aria-label="${count(st)} courses">${count(st)}</span>
+        <span>${tx(label)}</span><span class="cm-topic-n" aria-label="${tx('{n} courses', { n: count(st) })}">${count(st)}</span>
       </button></li>`;
 
     main.innerHTML = `
@@ -2987,22 +2835,23 @@
         <header class="cm-head">
           <div class="cm-head-inner">
             <div class="cm-head-text">
-              <p class="cm-eyebrow">Short lessons · ${KW.COURSES.length} courses · about 10 minutes each</p>
-              <h1 class="cm-title">Learn</h1>
-              <p class="cm-desc">Short courses with quizzes, and a Spot-the-scam game. Start with fake delivery messages, the most reported scam this month.</p>
+              <p class="cm-eyebrow">${tx('Short lessons · {n} courses · about 10 minutes each', { n: KW.COURSES.length })}</p>
+              <h1 class="cm-title">${tx('Learn')}</h1>
+              <p class="cm-desc">${tx('Short courses with quizzes, and a Spot-the-scam game. Start with fake delivery messages, the most reported scam this month.')}</p>
+              ${prefs.lang !== 'en' ? `<p class="cm-desc">${tx('The lessons, quizzes and game are in English for now.')}</p>` : ''}
             </div>
             ${next
-              ? `<a class="btn btn-primary btn-lg cm-new" href="#/learn/course/${next.c.id}">${next.p.done.length ? 'Continue' : passed ? 'Next course' : 'Start the first course'}</a>`
-              : `<a class="btn btn-primary btn-lg cm-new" href="#gameTitle" data-jump-game>Play Spot the scam</a>`}
+              ? `<a class="btn btn-primary btn-lg cm-new" href="#/learn/course/${next.c.id}">${next.p.done.length ? tx('Continue') : passed ? tx('Next course') : tx('Start the first course')}</a>`
+              : `<a class="btn btn-primary btn-lg cm-new" href="#gameTitle" data-jump-game>${tx('Play Spot the scam')}</a>`}
           </div>
         </header>
 
         <div class="cm-body">
           <nav class="cm-topics" aria-labelledby="progressTitle">
-            <h2 class="kicker" id="progressTitle">Your progress</h2>
-            <p class="lr-progress"><span class="stat-n">${passed}</span> of ${KW.COURSES.length} passed</p>
-            ${progressBar(Math.round(passed / KW.COURSES.length * 100), 'Courses passed')}
-            ${passed === KW.COURSES.length ? '<p class="tag tag-accent lr-badge">Kampung Scam-Buster: every course passed</p>' : ''}
+            <h2 class="kicker" id="progressTitle">${tx('Your progress')}</h2>
+            <p class="lr-progress">${th('{n} of {total} passed', { n: `<span class="stat-n">${passed}</span>`, total: KW.COURSES.length })}</p>
+            ${progressBar(Math.round(passed / KW.COURSES.length * 100), t('Courses passed'))}
+            ${passed === KW.COURSES.length ? `<p class="tag tag-accent lr-badge">${tx('Kampung Scam-Buster: every course passed')}</p>` : ''}
             <ul class="cm-topic-list lr-filters" role="list">
               ${filter('all', 'All courses')}
               ${filter('new', 'Not started')}
@@ -3012,11 +2861,11 @@
           </nav>
 
           <section class="cm-feed" aria-labelledby="coursesTitle">
-            <h2 class="sr-only" id="coursesTitle">Courses</h2>
+            <h2 class="sr-only" id="coursesTitle">${tx('Courses')}</h2>
             <div class="cm-toolbar">
-              <div class="seg lr-levels" role="radiogroup" aria-label="Level">
+              <div class="seg lr-levels" role="radiogroup" aria-label="${tx('Level')}">
                 ${[['all', 'All levels'], ...levels.map(l => [l, l])].map(([v, label]) => `
-                  <label class="seg-opt"><input type="radio" name="courseLevel" value="${esc(v)}" ${learnView.level === v ? 'checked' : ''}>${esc(label)}</label>`).join('')}
+                  <label class="seg-opt"><input type="radio" name="courseLevel" value="${esc(v)}" ${learnView.level === v ? 'checked' : ''}>${tx(label)}</label>`).join('')}
               </div>
             </div>
             <ol class="lr-list" id="courseList" role="list"></ol>
@@ -3025,10 +2874,10 @@
           <aside class="cm-side">
             <section class="game" id="gameCard" aria-labelledby="gameTitle"></section>
             <section aria-labelledby="drillTitle">
-              <h2 class="cm-side-title" id="drillTitle">Practise with your family</h2>
+              <h2 class="cm-side-title" id="drillTitle">${tx('Practise with your family')}</h2>
               <ul class="cm-side-list" role="list">
-                <li><strong>Scam Drills.</strong> Send a safe practice scam to someone in your Circle and see if they press Pause.
-                  <p class="lr-drill-btn"><a class="btn btn-secondary" href="#/pause">Send a practice scam</a></p></li>
+                <li>${th('{b}Scam Drills.{/b} Send a safe practice scam to someone in your Circle and see if they press Pause.', { b: '<strong>', '/b': '</strong>' })}
+                  <p class="lr-drill-btn"><a class="btn btn-secondary" href="#/pause">${tx('Send a practice scam')}</a></p></li>
               </ul>
             </section>
           </aside>
@@ -3063,7 +2912,7 @@
       .filter(x => learnView.status === 'all' || courseStatus(x.p) === learnView.status)
       .filter(x => learnView.level === 'all' || x.c.level === learnView.level);
     if (!shown.length) {
-      list.innerHTML = '<li class="empty"><p>No courses match. Try another filter.</p></li>';
+      list.innerHTML = `<li class="empty"><p>${tx('No courses match. Try another filter.')}</p></li>`;
       return;
     }
     list.innerHTML = shown.map(({ c, i, p }) => {
@@ -3075,16 +2924,16 @@
           <span class="lr-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span>
           <div class="cm-post-body">
             <p class="post-meta">
-              <span class="tag ${tag}">${label || progressWords(p, c)}</span>
-              <span class="post-by">${c.minutes} minutes · ${esc(c.level)} · ${c.lessons.length} lessons and a quiz</span>
+              <span class="tag ${tag}">${label ? tx(label) : esc(progressWords(p, c))}</span>
+              <span class="post-by">${tx('{n} minutes · {level} · {lessons} lessons and a quiz', { n: c.minutes, level: t(c.level), lessons: c.lessons.length })}</span>
             </p>
-            <h3 class="cm-post-title"><a href="#/learn/course/${c.id}">${esc(c.title)}</a></h3>
-            <p class="cm-excerpt">${esc(c.blurb)}</p>
-            ${st === 'started' ? progressBar(p.pct, `${c.title}: progress`) : ''}
+            <h3 class="cm-post-title"><a href="#/learn/course/${c.id}">${tx(c.title)}</a></h3>
+            <p class="cm-excerpt">${tx(c.blurb)}</p>
+            ${st === 'started' ? progressBar(p.pct, t('{course}: progress', { course: t(c.title) })) : ''}
             <div class="cm-actions">
-              <a class="btn btn-ghost" href="#/learn/course/${c.id}">${st === 'new' ? 'Start' : st === 'passed' ? 'Review the lessons' : lessonsLeft ? 'Continue' : 'Back to the lessons'}</a>
-              ${st !== 'passed' && !lessonsLeft ? `<a class="btn btn-ghost" href="#/learn/course/${c.id}/quiz">Take the quiz</a>` : ''}
-              ${st === 'passed' ? `<a class="btn btn-ghost" href="#/learn/course/${c.id}/quiz">Retake the quiz</a>` : ''}
+              <a class="btn btn-ghost" href="#/learn/course/${c.id}">${st === 'new' ? tx('Start') : st === 'passed' ? tx('Review the lessons') : lessonsLeft ? tx('Continue') : tx('Back to the lessons')}</a>
+              ${st !== 'passed' && !lessonsLeft ? `<a class="btn btn-ghost" href="#/learn/course/${c.id}/quiz">${tx('Take the quiz')}</a>` : ''}
+              ${st === 'passed' ? `<a class="btn btn-ghost" href="#/learn/course/${c.id}/quiz">${tx('Retake the quiz')}</a>` : ''}
             </div>
           </div>
         </li>`;
@@ -3098,25 +2947,25 @@
       const best = Math.max(prefs.gameBest || 0, game.score);
       if (best !== prefs.gameBest) { prefs.gameBest = best; savePrefs(); }
       card.innerHTML = `
-        <h2 class="cm-side-title" id="gameTitle">Spot the scam</h2>
-        <p class="game-score"><span class="stat-n">${game.score}</span> of ${game.order.length} right</p>
-        <p class="game-verdict">${game.score === game.order.length ? 'Perfect. You’re a natural scam-spotter.' : game.score >= 3 ? 'Nice work. A few of those were tricky.' : 'Scams are designed to fool people. Try a course and play again.'}</p>
-        <p class="muted">Your best score: ${best} of ${game.order.length}</p>
-        <div class="btn-row"><button type="button" class="btn btn-primary btn-lg" id="gameAgain">Play again</button></div>`;
+        <h2 class="cm-side-title" id="gameTitle">${tx('Spot the scam')}</h2>
+        <p class="game-score">${th('{n} of {total} right', { n: `<span class="stat-n">${game.score}</span>`, total: game.order.length })}</p>
+        <p class="game-verdict">${game.score === game.order.length ? tx('Perfect. You’re a natural scam-spotter.') : game.score >= 3 ? tx('Nice work. A few of those were tricky.') : tx('Scams are designed to fool people. Try a course and play again.')}</p>
+        <p class="muted">${tx('Your best score: {n} of {total}', { n: best, total: game.order.length })}</p>
+        <div class="btn-row"><button type="button" class="btn btn-primary btn-lg" id="gameAgain">${tx('Play again')}</button></div>`;
       $('#gameAgain').addEventListener('click', () => { resetGame(); renderGame(); });
       return;
     }
     const item = KW.SPOT_GAME[game.order[game.i]];
     card.innerHTML = `
-      <h2 class="cm-side-title" id="gameTitle">Spot the scam</h2>
-      <p class="muted">Message ${game.i + 1} of ${game.order.length} · ${game.score} right so far</p>
+      <h2 class="cm-side-title" id="gameTitle">${tx('Spot the scam')}</h2>
+      <p class="muted">${tx('Message {n} of {total} · {score} right so far', { n: game.i + 1, total: game.order.length, score: game.score })}</p>
       <figure class="game-msg">
         <blockquote>${esc(item.msg)}</blockquote>
         <figcaption>${esc(item.from)}</figcaption>
       </figure>
-      <div class="btn-row" role="group" aria-label="Your answer">
-        <button type="button" class="btn btn-secondary btn-lg" data-ans="scam">Scam</button>
-        <button type="button" class="btn btn-secondary btn-lg" data-ans="legit">Legit</button>
+      <div class="btn-row" role="group" aria-label="${tx('Your answer')}">
+        <button type="button" class="btn btn-secondary btn-lg" data-ans="scam">${tx('Scam')}</button>
+        <button type="button" class="btn btn-secondary btn-lg" data-ans="legit">${tx('Legit')}</button>
       </div>
       <div id="gameFeedback" aria-live="polite"></div>`;
     $$('[data-ans]', card).forEach(b => b.addEventListener('click', () => {
@@ -3127,9 +2976,9 @@
       $$('[data-ans]', card).forEach(x => { x.disabled = true; });
       b.classList.replace('btn-secondary', 'btn-primary');
       $('#gameFeedback').innerHTML = `
-        <p class="game-verdict ${right ? 'is-right' : 'is-wrong'}">${right ? 'Correct.' : 'Not quite.'} It’s ${item.isScam ? 'a scam' : 'legit'}.</p>
+        <p class="game-verdict ${right ? 'is-right' : 'is-wrong'}">${right ? tx('Correct.') : tx('Not quite.')} ${item.isScam ? tx('It’s a scam.') : tx('It’s legit.')}</p>
         <p>${esc(item.explain)}</p>
-        <div class="btn-row"><button type="button" class="btn btn-primary btn-lg" id="gameNext">${game.i + 1 < game.order.length ? 'Next message' : 'See my score'}</button></div>`;
+        <div class="btn-row"><button type="button" class="btn btn-primary btn-lg" id="gameNext">${game.i + 1 < game.order.length ? tx('Next message') : tx('See my score')}</button></div>`;
       $('#gameNext').addEventListener('click', () => { game.i++; game.answered = false; renderGame(); });
       $('#gameNext').focus();
     }));
@@ -3150,21 +2999,21 @@
 
     main.innerHTML = `
       <div class="page course-page">
-        <a class="btn btn-ghost back-link" href="#/learn">All courses</a>
+        <a class="btn btn-ghost back-link" href="#/learn">${tx('All courses')}</a>
         <div class="course-layout">
           <nav class="lesson-nav" aria-labelledby="courseTitle">
-            <p class="kicker">Course ${String(n).padStart(2, '0')} · ${course.minutes} minutes</p>
-            <h2 class="lesson-nav-title" id="courseTitle">${esc(course.title)}</h2>
+            <p class="kicker">${tx('Course {n} · {minutes} minutes', { n: String(n).padStart(2, '0'), minutes: course.minutes })}</p>
+            <h2 class="lesson-nav-title" id="courseTitle">${tx(course.title)}</h2>
             ${progressBar(courseProgress(id).pct)}
             <ol class="lesson-steps" role="list">
               ${course.lessons.map((l, i) => `
                 <li><a href="#/learn/course/${id}/${i}" ${i === idx ? 'aria-current="step"' : ''}>
                   <span class="step-n">${i + 1}</span><span class="step-title">${esc(l.title)}</span>
-                  ${p.done.includes(i) ? '<span class="step-state">Done</span>' : ''}
+                  ${p.done.includes(i) ? `<span class="step-state">${tx('Done')}</span>` : ''}
                 </a></li>`).join('')}
               <li><a href="#/learn/course/${id}/quiz" ${isQuiz ? 'aria-current="step"' : ''}>
-                <span class="step-n">${course.lessons.length + 1}</span><span class="step-title">Quiz</span>
-                ${p.passed ? '<span class="step-state">Passed</span>' : ''}
+                <span class="step-n">${course.lessons.length + 1}</span><span class="step-title">${tx('Quiz')}</span>
+                ${p.passed ? `<span class="step-state">${tx('Passed')}</span>` : ''}
               </a></li>
             </ol>
           </nav>
@@ -3176,12 +3025,12 @@
     if (!isQuiz) {
       const lesson = course.lessons[idx];
       body.innerHTML = `
-        <p class="kicker">Lesson ${idx + 1} of ${course.lessons.length}</p>
+        <p class="kicker">${tx('Lesson {n} of {total}', { n: idx + 1, total: course.lessons.length })}</p>
         <h1 class="display display-sm">${esc(lesson.title)}</h1>
         <div class="lesson-content">${lesson.body}</div>
         <div class="btn-row">
-          ${idx > 0 ? `<a class="btn btn-secondary btn-lg" href="#/learn/course/${id}/${idx - 1}">Previous lesson</a>` : ''}
-          <button type="button" class="btn btn-primary btn-lg" id="lessonDone">${idx + 1 < course.lessons.length ? 'Got it, next lesson' : 'Got it, take the quiz'}</button>
+          ${idx > 0 ? `<a class="btn btn-secondary btn-lg" href="#/learn/course/${id}/${idx - 1}">${tx('Previous lesson')}</a>` : ''}
+          <button type="button" class="btn btn-primary btn-lg" id="lessonDone">${idx + 1 < course.lessons.length ? tx('Got it, next lesson') : tx('Got it, take the quiz')}</button>
         </div>`;
       $('#lessonDone').addEventListener('click', () => {
         if (!p.done.includes(idx)) p.done.push(idx);
@@ -3192,9 +3041,9 @@
     }
 
     body.innerHTML = `
-      <p class="kicker">Quiz</p>
-      <h1 class="display display-sm">Check what you’ve learned.</h1>
-      <p class="lede">Get ${passMark(course)} of ${course.quiz.length} right to pass the course.</p>
+      <p class="kicker">${tx('Quiz')}</p>
+      <h1 class="display display-sm">${tx('Check what you’ve learned.')}</h1>
+      <p class="lede">${tx('Get {n} of {total} right to pass the course.', { n: passMark(course), total: course.quiz.length })}</p>
       <form id="quizForm" class="quiz">
         ${course.quiz.map((q, qi) => `
           <fieldset class="quiz-q" id="q${qi}">
@@ -3204,7 +3053,7 @@
             <p class="quiz-explain" hidden></p>
           </fieldset>`).join('')}
         <div id="quizResult" aria-live="polite"></div>
-        <div class="btn-row"><button type="submit" class="btn btn-primary btn-lg">Check my answers</button></div>
+        <div class="btn-row"><button type="submit" class="btn btn-primary btn-lg">${tx('Check my answers')}</button></div>
       </form>`;
 
     $('#quizForm').addEventListener('submit', e => {
@@ -3214,7 +3063,7 @@
         const sel = $(`input[name=q${qi}]:checked`, form);
         return sel ? Number(sel.value) : null;
       });
-      if (answers.includes(null)) { toast('Please answer every question.', 'warn'); return; }
+      if (answers.includes(null)) { toast(t('Please answer every question.'), 'warn'); return; }
       let score = 0;
       course.quiz.forEach((q, qi) => {
         const ok = answers[qi] === q.answer;
@@ -3224,7 +3073,7 @@
         fs.classList.add(ok ? 'is-right' : 'is-wrong');
         const ex = $('.quiz-explain', fs);
         ex.hidden = false;
-        ex.innerHTML = `<strong>${ok ? 'Correct.' : 'Not quite. The answer is: ' + esc(q.options[q.answer]) + '.'}</strong> ${esc(q.explain)}`;
+        ex.innerHTML = `<strong>${ok ? tx('Correct.') : tx('Not quite. The answer is: {answer}.', { answer: q.options[q.answer] })}</strong> ${esc(q.explain)}`;
       });
       const pass = score >= passMark(course);
       p.score = Math.max(p.score || 0, score);
@@ -3232,14 +3081,14 @@
       savePrefs();
       const nextCourse = KW.COURSES.find(c => !courseProgress(c.id).passed);
       $('#quizResult').innerHTML = `
-        <p class="game-verdict ${pass ? 'is-right' : 'is-wrong'}">${pass ? `You passed, ${score} of ${course.quiz.length}.` : `${score} of ${course.quiz.length}. So close.`}</p>
-        <p>${pass ? 'Share what you learned with someone you care about.' : 'Read the explanations above and try again.'}</p>
+        <p class="game-verdict ${pass ? 'is-right' : 'is-wrong'}">${pass ? tx('You passed, {n} of {total}.', { n: score, total: course.quiz.length }) : tx('{n} of {total}. So close.', { n: score, total: course.quiz.length })}</p>
+        <p>${pass ? tx('Share what you learned with someone you care about.') : tx('Read the explanations above and try again.')}</p>
         <div class="btn-row">
-          ${pass && nextCourse ? `<a class="btn btn-primary btn-lg" href="#/learn/course/${nextCourse.id}">Next course: ${esc(nextCourse.title)}</a>` : ''}
-          ${pass ? `<button type="button" class="btn btn-secondary btn-lg" id="shareTip">Share a tip in Community</button>` : ''}
+          ${pass && nextCourse ? `<a class="btn btn-primary btn-lg" href="#/learn/course/${nextCourse.id}">${tx('Next course: {title}', { title: t(nextCourse.title) })}</a>` : ''}
+          ${pass ? `<button type="button" class="btn btn-secondary btn-lg" id="shareTip">${tx('Share a tip in Community')}</button>` : ''}
         </div>`;
       const share = $('#shareTip');
-      if (share) share.addEventListener('click', () => openPostModal({ flair: 'tips', title: `What I learned from “${course.title}”` }));
+      if (share) share.addEventListener('click', () => openPostModal({ flair: 'tips', title: t('What I learned from “{title}”', { title: t(course.title) }) }));
     });
   }
 
@@ -3285,7 +3134,7 @@
             <section aria-labelledby="aiUrgentTitle">
               <h2 class="kicker" id="aiUrgentTitle" data-ai="aiUrgent"></h2>
               <ul class="helpline-list">
-                ${KW.HELPLINES.map(h => `<li><a href="tel:${h.number.replace(/\s/g, '')}">${esc(h.number)}</a> <span>${esc(h.label)}</span><span class="muted">${esc(h.note)}</span></li>`).join('')}
+                ${KW.HELPLINES.map(h => `<li><a href="tel:${h.number.replace(/\s/g, '')}">${esc(h.number)}</a> <span>${tx(h.label)}</span><span class="muted">${tx(h.note)}</span></li>`).join('')}
               </ul>
             </section>
           </aside>

@@ -415,6 +415,10 @@ body.route-ask .fab { display: none; }
 .cm-desc { font-size: 1.0625rem; color: var(--ink-78); }
 .cm-new { white-space: nowrap; }
 
+/* Note above posts and reports translated by AI, with a link back to the original words. */
+.written-note { font-size: 0.9375rem; color: var(--ink-78); margin: var(--space-3) 0 var(--space-4); }
+.written-toggle { background: none; border: 0; padding: 0; font: inherit; color: var(--color-accent-700); text-decoration: underline; cursor: pointer; }
+
 .cm-body { max-width: var(--page-max); margin-inline: auto; padding: 0 2.5rem var(--bottom); display: flex; flex-wrap: wrap; align-items: flex-start; }
 
 .cm-topics { flex: 0 0 200px; align-self: stretch; padding: 1.5rem 1rem 1.5rem 0; border-right: 1px solid var(--cm-rule); }
@@ -856,4 +860,17 @@ body.route-ask .fab { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* Tamil words run much longer than English, so big headings get a smaller size there,
+   and any language can break a word that still won't fit rather than spill off screen. */
+.display, .display-sm, .cf-headline, .pause-headline { overflow-wrap: break-word; }
+:lang(ta) .display { font-size: 2.75rem; line-height: 3.5rem; letter-spacing: 0; }
+:lang(ta) .display, :lang(ta) .pause-page .page-head .display { max-width: none; }
+:lang(ta) .pause-btn-word { font-size: 2.25rem; }
+:lang(ta) .display-sm, :lang(ta) .cf-headline, :lang(ta) .pause-headline { font-size: 2rem; line-height: 2.75rem; letter-spacing: 0; }
+@media (max-width: 720px) {
+  :lang(ta) .display, :lang(ta) .pause-page .page-head .display { font-size: 1.75rem; line-height: 2.5rem; }
+  :lang(ta) .display-sm, :lang(ta) .cf-headline, :lang(ta) .pause-headline { font-size: 1.5rem; line-height: 2.25rem; }
+  :lang(ta) .pause-btn-word { font-size: 1.875rem; }
 }

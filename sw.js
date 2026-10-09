@@ -3,12 +3,13 @@
    the network first, so a new version shows up straight away; the saved copy
    is only used when there's no connection. The API and live updates are
    never cached. */
-const CACHE = 'kampung-watch-v1';
+const CACHE = 'kampung-watch-v2';
 const SHELL = [
   '/',
   '/css/broadsheet.css',
   '/css/styles.css',
   '/js/data.js',
+  '/js/i18n.js',
   '/js/app.js',
   '/manifest.webmanifest',
   '/icons/icon-192.png',

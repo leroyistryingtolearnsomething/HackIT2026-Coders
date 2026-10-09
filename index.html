@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
+  <a class="skip-link" href="#main" data-t="Skip to content">Skip to content</a>
 
   <header class="site-header">
     <nav class="nav site-bar" aria-label="Main">
@@ -53,29 +53,29 @@
         <button type="button" class="btn btn-ghost" id="volunteerBtn">Volunteer sign in</button>
       </div>
     </nav>
-    <p class="vol-strip vol-only">Volunteer mode. <span id="volStripText"></span> You can answer cases, verify Scam Radar reports and give verdicts.</p>
+    <p class="vol-strip vol-only"><span data-t="Volunteer mode.">Volunteer mode.</span> <span id="volStripText"></span> <span data-t="You can answer cases, verify Scam Radar reports and give verdicts.">You can answer cases, verify Scam Radar reports and give verdicts.</span></p>
   </header>
 
   <div id="alertBanner" class="alert-banner" role="alert" hidden></div>
 
   <main id="main" tabindex="-1"></main>
 
-  <a href="#/ask" class="btn btn-primary fab" id="fab">Is this a scam?</a>
+  <a href="#/ask" class="btn btn-primary fab" id="fab" data-t="Is this a scam?">Is this a scam?</a>
 
   <footer class="site-footer">
     <div class="footer-grid">
       <div>
         <p class="footer-brand">Kampung Watch</p>
-        <p class="muted">Neighbours helping neighbours spot, discuss and stop scams.</p>
+        <p class="muted" data-t="Neighbours helping neighbours spot, discuss and stop scams.">Neighbours helping neighbours spot, discuss and stop scams.</p>
       </div>
       <div>
-        <h2 class="kicker">Need help now?</h2>
+        <h2 class="kicker" data-t="Need help now?">Need help now?</h2>
         <ul class="helpline-list" id="footerHelplines"></ul>
       </div>
       <div>
-        <h2 class="kicker">About this prototype</h2>
-        <p class="muted">Built for HackIT 2026. Reports, posts and cases are shared through the Kampung Watch server. Your course progress and alert settings stay in this browser.</p>
-        <button type="button" class="btn btn-ghost" id="resetLocal">Clear my browser data</button>
+        <h2 class="kicker" data-t="About this prototype">About this prototype</h2>
+        <p class="muted" data-t="Built for HackIT 2026. Reports, posts and cases are shared through the Kampung Watch server. Your course progress and alert settings stay in this browser.">Built for HackIT 2026. Reports, posts and cases are shared through the Kampung Watch server. Your course progress and alert settings stay in this browser.</p>
+        <button type="button" class="btn btn-ghost" id="resetLocal" data-t="Clear my browser data">Clear my browser data</button>
       </div>
     </div>
   </footer>
@@ -85,6 +85,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="js/data.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

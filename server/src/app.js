@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
-import { createAssistant } from './ai/index.js';
+import { createAssistant, createTranslator } from './ai/index.js';
 import { loadConfig, WEB_ROOT } from './config.js';
 import { openDb } from './db.js';
 import { createHub } from './events.js';
@@ -18,10 +18,11 @@ import circlesRouter from './routes/circles.js';
 import pausesRouter from './routes/pauses.js';
 import drillsRouter from './routes/drills.js';
 import pauseLinksRouter from './routes/pauseLinks.js';
+import translateRouter from './routes/translate.js';
 import { createPauseWatch } from './models/pauses.js';
 
 export function createApp(overrides = {}) {
-  // Tests pass their own `assistant` provider (or null); otherwise it's built from server/.env.
+  // Tests pass their own `assistant` provider (or null), used for translating too; otherwise both are built from server/.env.
   const { assistant: assistantOverride, ...configOverrides } = overrides;
   const config = loadConfig(configOverrides);
   fs.mkdirSync(config.dataDir, { recursive: true });
@@ -32,7 +33,8 @@ export function createApp(overrides = {}) {
   const bot = createBot({ db, hub, enabled: config.autoReply });
   const assistant = 'assistant' in overrides ? assistantOverride : createAssistant(config);
   const pauseWatch = createPauseWatch({ db, hub, bot, delayMs: config.pauseEscalateMs });
-  const ctx = { db, hub, images, bot, config, assistant, pauseWatch };
+  const translator = 'assistant' in overrides ? assistantOverride : createTranslator(config);
+  const ctx = { db, hub, images, bot, config, assistant, translator, pauseWatch };
 
   const app = express();
   app.disable('x-powered-by');
@@ -62,6 +64,7 @@ export function createApp(overrides = {}) {
   api.use('/pauses', pausesRouter(ctx));
   api.use('/drills', drillsRouter(ctx));
   api.use('/pause-link', pauseLinksRouter(ctx));
+  api.use('/translate', translateRouter(ctx));
   api.use((req, res, next) => next(new HttpError(404, 'No such API endpoint')));
   api.use((err, req, res, next) => {
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'That upload is too large.' });

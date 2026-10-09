@@ -39,6 +39,9 @@ export function loadConfig(overrides = {}) {
     assistantModel: process.env.ASSISTANT_MODEL || DEFAULT_MODELS[aiProvider] || null,
     assistantDailyLimit: Number(process.env.ASSISTANT_DAILY_LIMIT) || 500,
     assistantPerMinute: 8,
+    // Translating posts for 华语/Malay/Tamil readers uses the same AI service.
+    translateDailyLimit: Number(process.env.TRANSLATE_DAILY_LIMIT) || 1000,
+    translateModel: process.env.TRANSLATE_MODEL || 'gemini-flash-lite-latest',
     ...overrides
   };
 }
