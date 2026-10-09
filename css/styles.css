@@ -440,7 +440,7 @@ body.route-ask .fab { display: none; }
 .cm-search input {
   flex: 1; min-width: 0; min-height: 44px; padding: 0 var(--space-1);
   font: inherit; font-size: 1.0625rem; color: var(--color-text);
-  background: transparent; border: 0; border-bottom: 2px solid var(--color-text); border-radius: 0;
+  background: transparent; border: 0; border-bottom: 1px solid var(--color-text); border-radius: 0;
 }
 .cm-search input::placeholder { color: var(--ink-70); }
 .cm-search input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
@@ -482,7 +482,7 @@ body.route-ask .fab { display: none; }
 
 .cm-side { flex: 1 1 280px; min-width: 0; padding: 1.5rem 0; display: flex; flex-direction: column; gap: var(--gap-lg); }
 .cm-side-title {
-  margin: 0; padding-top: var(--space-2); border-top: 2px solid var(--color-text);
+  margin: 0; padding-top: var(--space-2); border-top: 1px solid var(--color-text);
   font-family: var(--font-body); font-size: 1rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
 }
 .cm-side-list { list-style: none; margin: 0; padding: 0; }
