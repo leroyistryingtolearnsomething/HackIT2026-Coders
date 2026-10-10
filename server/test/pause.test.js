@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
+import { becomeVolunteer } from './helpers.js';
 
-const CODE = 'test-code';
 const MUM = 'resident-mum-0001';
 const SON = 'resident-son-0002';
 const STRANGER = 'resident-xxx-0003';
@@ -28,13 +28,13 @@ before(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kampung-pause-'));
   ({ app: server, close } = createApp({
     dataDir: tmp, dbFile: ':memory:', uploadsDir: path.join(tmp, 'uploads'),
-    volunteerCode: CODE, usingDefaultCode: false, autoReply: false, writeLimitPerMinute: 1000,
+    autoReply: false, writeLimitPerMinute: 1000,
     pauseEscalateMs: ESCALATE_MS, assistant: null
   }));
   server = server.listen(0);
   await new Promise(r => server.once('listening', r));
   base = `http://127.0.0.1:${server.address().port}/api`;
-  const login = await call('POST', '/volunteer/login', { body: { name: 'Mei', role: 'RC Volunteer', area: 'Tampines', code: CODE } });
+  const login = await becomeVolunteer(call);
   volunteerToken = login.data.token;
 });
 

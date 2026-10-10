@@ -1,7 +1,8 @@
 /* Identity for the prototype:
    - Residents are anonymous. The browser generates a random client id and sends
      it as the X-Client-Id header, so "my cases" and votes follow that browser.
-   - Volunteers log in with a shared access code and get a session token. */
+   - Volunteers sign in once their identity is confirmed and they've passed the Intermediate
+     courses (routes/misc.js), and get a session token. */
 import crypto from 'node:crypto';
 import { HttpError, nowIso } from './http.js';
 
@@ -42,13 +43,6 @@ export function requireClient(req, res, next) {
 export function requireVolunteer(req, res, next) {
   if (!req.volunteer) return next(new HttpError(401, 'Volunteer login required'));
   next();
-}
-
-/* Constant-time comparison of the volunteer access code. */
-export function codeMatches(given, expected) {
-  const a = crypto.createHash('sha256').update(String(given || '')).digest();
-  const b = crypto.createHash('sha256').update(String(expected)).digest();
-  return crypto.timingSafeEqual(a, b);
 }
 
 /* Simple in-memory sliding-window limiter for write requests. */

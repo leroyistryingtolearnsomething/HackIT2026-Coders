@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
+import { becomeVolunteer, INTERMEDIATE } from './helpers.js';
 
-const CODE = 'test-code';
 const RESIDENT = 'resident-aaaa-1111';
 const OTHER = 'resident-bbbb-2222';
 // 1×1 transparent PNG
@@ -26,7 +26,7 @@ before(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kampung-test-'));
   ({ app: server, close } = createApp({
     dataDir: tmp, dbFile: ':memory:', uploadsDir: path.join(tmp, 'uploads'),
-    volunteerCode: CODE, usingDefaultCode: false, autoReply: false, writeLimitPerMinute: 1000
+    autoReply: false, writeLimitPerMinute: 1000
   }));
   server = server.listen(0);
   await new Promise(r => server.once('listening', r));
@@ -55,11 +55,28 @@ test('seed data is loaded', async () => {
   assert.ok(posts.data[0].score >= posts.data[1].score);
 });
 
-test('volunteer login', async () => {
-  const wrong = await call('POST', '/volunteer/login', { body: { name: 'Mei', role: 'RC Volunteer', area: 'Tampines', code: 'nope' } });
-  assert.equal(wrong.status, 401);
-  const ok = await call('POST', '/volunteer/login', { body: { name: 'Mei', role: 'RC Volunteer', area: 'Tampines', code: CODE } });
+test('volunteer sign-in needs a confirmed identity and the Intermediate courses', async () => {
+  const signIn = () => call('POST', '/volunteer/login', { body: { role: 'RC Volunteer', area: 'Tampines' } });
+  assert.equal((await signIn()).status, 403);
+
+  const steps = await call('POST', '/volunteer/verify', { body: { name: 'Mei' } });
+  assert.equal(steps.data.identity.name, 'Mei');
+  assert.equal(steps.data.ready, false);
+  assert.deepEqual(steps.data.courses.map(c => c.id), Array.from(INTERMEDIATE, c => c.id)); // Array.from: KW lives in another JS realm
+  assert.equal((await signIn()).status, 403); // courses not passed yet
+
+  // The server marks the quiz: wrong answers don't count as a pass.
+  const course = INTERMEDIATE[0];
+  const failed = await call('POST', '/learn/quiz', { body: { course: course.id, answers: course.quiz.map(q => (q.answer + 1) % q.options.length) } });
+  assert.deepEqual([failed.data.score, failed.data.passed], [0, false]);
+  assert.equal((await call('POST', '/learn/quiz', { body: { course: course.id, answers: [0] } })).status, 400);
+  assert.equal((await call('POST', '/learn/quiz', { body: { course: 'nope', answers: [] } })).status, 400);
+  assert.deepEqual((await call('GET', '/learn/passes')).data, []);
+
+  const ok = await becomeVolunteer(call);
   assert.equal(ok.status, 201);
+  assert.equal(ok.data.volunteer.name, 'Mei'); // the confirmed name
+  assert.equal((await call('GET', '/volunteer/steps')).data.ready, true);
   volunteerToken = ok.data.token;
   const me = await call('GET', '/me', { token: volunteerToken });
   assert.equal(me.data.volunteer.name, 'Mei');

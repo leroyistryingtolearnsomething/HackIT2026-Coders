@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
-import { requireClient, handleFor, hashToken, codeMatches, rateLimit } from '../auth.js';
+import { requireClient, handleFor, hashToken, rateLimit } from '../auth.js';
 import { KW, TOWNS } from '../shared.js';
 import { text, oneOf, HttpError, nowIso } from '../http.js';
+import { VOLUNTEER_COURSES, passedCourses } from './learn.js';
 
 const ROLES = ['Digital Ambassador', 'RC Volunteer', 'Student Volunteer', 'CC Scam-Buster'];
 
@@ -12,7 +13,6 @@ export default function miscRouter({ db, hub, config, bot, assistant }) {
   r.get('/health', (req, res) => res.json({ ok: true, time: nowIso() }));
 
   r.get('/config', (req, res) => res.json({
-    usingDefaultCode: config.usingDefaultCode,
     autoReply: bot.enabled,
     assistant: Boolean(assistant),
     assistantProvider: assistant ? assistant.name : null,
@@ -43,12 +43,39 @@ export default function miscRouter({ db, hub, config, bot, assistant }) {
     });
   });
 
-  /* Volunteers sign in with the shared access code. */
-  r.post('/volunteer/login', rateLimit({ max: 10 }), (req, res) => {
+  /* Becoming a volunteer takes two steps, so residents know volunteers are real and trained:
+     1. confirm who you are (Singpass in a real launch; a demo stand-in here), and
+     2. pass every Intermediate course in Learn (the server marks the quizzes). */
+  function volunteerSteps(clientId) {
+    const identity = db.prepare('SELECT name, method, verified_at FROM identity_checks WHERE client_id = ?').get(clientId);
+    const passed = passedCourses(db, clientId);
+    const courses = VOLUNTEER_COURSES.map(c => ({ id: c.id, title: c.title, passed: passed.includes(c.id) }));
+    return {
+      identity: identity ? { name: identity.name, method: identity.method, verifiedAt: identity.verified_at } : null,
+      courses,
+      ready: Boolean(identity) && courses.every(c => c.passed)
+    };
+  }
+
+  r.get('/volunteer/steps', requireClient, (req, res) => res.json(volunteerSteps(req.clientId)));
+
+  /* Demo only: a real launch would send the volunteer to Singpass and take the name it returns. */
+  r.post('/volunteer/verify', requireClient, rateLimit({ max: 10 }), (req, res) => {
+    const name = text(req.body?.name, 'name', { min: 2, max: 40 });
+    db.prepare(`INSERT INTO identity_checks (client_id, name, method, verified_at) VALUES (?, ?, 'singpass-demo', ?)
+      ON CONFLICT (client_id) DO UPDATE SET name = excluded.name, method = excluded.method, verified_at = excluded.verified_at`)
+      .run(req.clientId, name, nowIso());
+    res.json(volunteerSteps(req.clientId));
+  });
+
+  r.post('/volunteer/login', requireClient, rateLimit({ max: 10 }), (req, res) => {
     const b = req.body || {};
-    if (!codeMatches(b.code, config.volunteerCode)) throw new HttpError(401, 'That access code is not correct');
+    const steps = volunteerSteps(req.clientId);
+    if (!steps.identity) throw new HttpError(403, 'Please confirm who you are with Singpass first.');
+    const missing = steps.courses.filter(c => !c.passed);
+    if (missing.length) throw new HttpError(403, `Please pass these Learn courses first: ${missing.map(c => c.title).join(', ')}.`);
     const volunteer = {
-      name: text(b.name, 'name', { min: 2, max: 40 }),
+      name: steps.identity.name, // the verified name, not one typed at sign-in
       role: oneOf(b.role, ROLES, 'role'),
       area: oneOf(b.area, TOWNS, 'area')
     };

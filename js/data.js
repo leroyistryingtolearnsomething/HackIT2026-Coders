@@ -337,8 +337,8 @@ KW.COURSES = [
     ]
   },
   {
-    id: 'protect', title: 'Protecting our seniors', level: 'For everyone', minutes: 10,
-    blurb: 'How to help parents and neighbours stay safe — without lecturing.',
+    id: 'protect', title: 'Looking out for each other', level: 'For everyone', minutes: 10,
+    blurb: 'How to help family, friends and neighbours stay safe — without lecturing.',
     lessons: [
       { title: 'Remember: Add, Check, Tell', body: `
         <ul>
@@ -355,7 +355,7 @@ KW.COURSES = [
         </ol>` },
       { title: 'Talking about it kindly', body: `
         <p>Shame keeps victims silent. Share your own near-misses, praise them for checking, and agree on a family “check with me first” rule for any money request.</p>
-        <p class="callout">Seniors who prefer talking can use the <strong>call-back option</strong> on <a href="#/ask">Ask a Neighbour</a> to speak to a volunteer in their language.</p>` }
+        <p class="callout">Anyone who would rather talk can use the <strong>call-back option</strong> on <a href="#/ask">Ask a Neighbour</a> to speak to a volunteer in their language.</p>` }
     ],
     quiz: [
       { q: 'What does “Add, Check, Tell” stand for?',
@@ -364,7 +364,7 @@ KW.COURSES = [
       { q: 'Your mum gets a WhatsApp from “you” on a new number asking for money. What family rule helps most?',
         options: ['Always pay quickly', 'Call the person on their old number first', 'Reply asking for a photo', 'Ignore all messages'],
         answer: 1, explain: 'Verifying on a known number defeats “new number” impersonation.' },
-      { q: 'Which approach helps seniors report scams?',
+      { q: 'Which approach helps people report scams?',
         options: ['Scolding them for falling for it', 'Sharing your own near-misses and praising them for checking', 'Taking away their phone', 'Telling them scams are rare'],
         answer: 1, explain: 'Removing shame makes people more likely to ask for help early.' }
     ]

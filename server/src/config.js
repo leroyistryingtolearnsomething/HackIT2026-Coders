@@ -26,8 +26,6 @@ export function loadConfig(overrides = {}) {
     dataDir,
     dbFile: path.join(dataDir, 'kampung.db'),
     uploadsDir: path.join(dataDir, 'uploads'),
-    volunteerCode: process.env.VOLUNTEER_CODE || 'kampung2026',
-    usingDefaultCode: !process.env.VOLUNTEER_CODE,
     autoReply: process.env.AUTO_REPLY !== 'false',
     // Pause: how long the resident's Circle has to answer before volunteers are alerted.
     pauseEscalateMs: (Number(process.env.PAUSE_ESCALATE_SECONDS) || 90) * 1000,
@@ -42,6 +40,8 @@ export function loadConfig(overrides = {}) {
     // Translating posts for 华语/Malay/Tamil readers uses the same AI service.
     translateDailyLimit: Number(process.env.TRANSLATE_DAILY_LIMIT) || 1000,
     translateModel: process.env.TRANSLATE_MODEL || 'gemini-flash-lite-latest',
+    seaLionEnabled: Boolean(process.env.SEALION_API_KEY),
+    seaLionModel: process.env.SEALION_MODEL || 'aisingapore/Qwen-SEA-LION-v4.5-27B-IT',
     ...overrides
   };
 }

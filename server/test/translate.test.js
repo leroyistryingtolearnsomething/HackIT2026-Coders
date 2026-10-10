@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
 import { parseReply } from '../src/routes/translate.js';
+import { seaLionProvider, withFallback } from '../src/ai/sealion.js';
 
 /* Answers every batch with "[zh] <text>", like a provider streaming a JSON array. */
 function fakeProvider({ reply } = {}) {
@@ -84,4 +85,31 @@ test('parseReply accepts a fenced JSON array of the right length only', () => {
   assert.deepEqual(parseReply('```json\n["a","b"]\n```', 2), ['a', 'b']);
   assert.throws(() => parseReply('["a"]', 2));
   assert.throws(() => parseReply('not json', 1));
+});
+
+test('SEA-LION provider sends an OpenAI-style request and reads the reply', async () => {
+  const sent = [];
+  const fakeFetch = async (url, init) => {
+    sent.push({ url, init });
+    return { ok: true, json: async () => ({ choices: [{ message: { content: '["你好"]' }, finish_reason: 'stop' }] }) };
+  };
+  const p = seaLionProvider('key-123', 'aisingapore/test-model', { fetchImpl: fakeFetch });
+  let text = '';
+  const result = await p.reply({ system: 'S', context: 'C', messages: [{ role: 'user', content: '["Hello"]' }], onText: t => { text += t; } });
+  assert.equal(result.stopReason, 'end');
+  assert.equal(text, '["你好"]');
+  assert.equal(sent[0].url, 'https://api.sea-lion.ai/v1/chat/completions');
+  assert.equal(sent[0].init.headers.Authorization, 'Bearer key-123');
+  const body = JSON.parse(sent[0].init.body);
+  assert.equal(body.model, 'aisingapore/test-model');
+  assert.deepEqual(body.messages.map(m => m.role), ['system', 'user']);
+});
+
+test('translating falls back to the backup AI when SEA-LION is busy', async () => {
+  const busy = seaLionProvider('k', 'm', { fetchImpl: async () => ({ ok: false, status: 429 }) });
+  const backup = fakeProvider();
+  const call = await start({ assistant: withFallback(busy, backup) });
+  const res = await call({ lang: 'zh', texts: ['Scam alert'] });
+  assert.deepEqual(res.data.translations, ['[zh] Scam alert']);
+  assert.equal(backup.calls.length, 1);
 });

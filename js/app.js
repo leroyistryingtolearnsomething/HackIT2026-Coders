@@ -427,32 +427,70 @@
     router();
   }
 
-  function openVolunteerLogin() {
+  /* Becoming a volunteer: confirm who you are (Singpass in a real launch, a demo here),
+     pass the Intermediate courses in Learn, then choose a role and area. The server
+     checks both steps, so residents know every volunteer is real and trained. */
+  async function openVolunteerLogin() {
     const roles = (cache.config && cache.config.volunteerRoles) || ['Digital Ambassador', 'RC Volunteer', 'Student Volunteer', 'CC Scam-Buster'];
+    let steps;
+    try {
+      steps = await api.get('/volunteer/steps');
+    } catch (err) {
+      toast(err.message === 'offline' ? t('Can’t reach the server. Check your connection and try again.') : err.message, 'warn');
+      return;
+    }
+    const tick = done => `<span class="vol-step-mark" aria-hidden="true">${done ? '✓' : ''}</span>`;
     openModal({
-      title: t('Volunteer sign-in'),
+      title: t('Become a volunteer'),
       body: `
-        <form id="volForm" class="form-grid">
-          <p class="muted full">${tx('Volunteer mode lets trained Digital Ambassadors, RC/CC and student volunteers answer cases, verify Scam Radar reports and give verdicts in the community.')}</p>
-          <div class="field full"><label for="vName">${tx('Your name')}</label><input id="vName" class="input" required minlength="2" maxlength="40" autocomplete="name"></div>
-          <div class="field"><label for="vRole">${tx('Role')}</label><select id="vRole" class="input">${roles.map(r => `<option value="${esc(r)}">${tx(r)}</option>`).join('')}</select></div>
-          <div class="field"><label for="vArea">${tx('Area')}</label><select id="vArea" class="input">${townOptions(prefs.subscription.town || 'Tampines')}</select></div>
-          <div class="field full"><label for="vCode">${tx('Volunteer access code')}</label><input id="vCode" class="input" type="password" required autocomplete="off"></div>
-          ${cache.config && cache.config.usingDefaultCode ? `<p class="full muted">${th('This server is using the prototype’s default code (see {file}).', { file: '<code>server/.env.example</code>' })}</p>` : ''}
-          <div class="full form-actions">
-            <button type="button" class="btn btn-secondary" data-close>${tx('Cancel')}</button>
-            <button type="submit" class="btn btn-primary">${tx('Sign in')}</button>
-          </div>
-        </form>`,
+        <p class="muted">${tx('Volunteers answer cases, verify Scam Radar reports and give verdicts in the community. So residents can trust them, every volunteer confirms who they are and passes the Intermediate courses first.')}</p>
+        <ol class="vol-steps" role="list">
+          <li class="vol-step ${steps.identity ? 'is-done' : ''}">
+            <h3>${tick(steps.identity)}${tx('1. Confirm who you are')}</h3>
+            ${steps.identity ? `<p>${th('Confirmed as {name} (Singpass demo).', { name: `<strong>${esc(steps.identity.name)}</strong>` })}</p>` : `
+              <form id="volVerify" class="vol-verify">
+                <p class="muted">${tx('In a real launch this opens Singpass. This prototype can’t connect to Singpass, so type your name as it appears on your NRIC.')}</p>
+                <div class="field"><label for="vName">${tx('Your name')}</label><input id="vName" class="input" required minlength="2" maxlength="40" autocomplete="name"></div>
+                <button type="submit" class="btn btn-secondary">${tx('Verify with Singpass (demo)')}</button>
+              </form>`}
+          </li>
+          <li class="vol-step ${steps.courses.every(c => c.passed) ? 'is-done' : ''}">
+            <h3>${tick(steps.courses.every(c => c.passed))}${tx('2. Pass the Intermediate courses')}</h3>
+            <ul class="vol-courses" role="list">
+              ${steps.courses.map(c => `
+                <li><span>${tx(c.title)}</span>${c.passed
+                  ? `<span class="tag tag-accent">${tx('Passed')}</span>`
+                  : `<a class="btn btn-ghost" href="#/learn/course/${esc(c.id)}" data-close>${tx('Take the course')}</a>`}</li>`).join('')}
+            </ul>
+          </li>
+          <li class="vol-step">
+            <h3>${tick(false)}${tx('3. Choose your role and area')}</h3>
+            <form id="volForm" class="form-grid">
+              <div class="field"><label for="vRole">${tx('Role')}</label><select id="vRole" class="input">${roles.map(r => `<option value="${esc(r)}">${tx(r)}</option>`).join('')}</select></div>
+              <div class="field"><label for="vArea">${tx('Area')}</label><select id="vArea" class="input">${townOptions(prefs.subscription.town || 'Tampines')}</select></div>
+              ${steps.ready ? '' : `<p class="full muted">${tx('Finish steps 1 and 2 to sign in.')}</p>`}
+              <div class="full form-actions">
+                <button type="button" class="btn btn-secondary" data-close>${tx('Cancel')}</button>
+                <button type="submit" class="btn btn-primary" ${steps.ready ? '' : 'disabled'}>${tx('Sign in')}</button>
+              </div>
+            </form>
+          </li>
+        </ol>`,
       onMount: body => {
         $$('[data-close]', body).forEach(b => b.addEventListener('click', () => closeModal()));
+        const verify = $('#volVerify', body);
+        if (verify) verify.addEventListener('submit', e => {
+          e.preventDefault();
+          act(e.submitter, async () => {
+            await api.post('/volunteer/verify', { name: $('#vName', body).value });
+            closeModal({ silent: true });
+            openVolunteerLogin(); // redraw with step 1 ticked
+          });
+        });
         $('#volForm', body).addEventListener('submit', e => {
           e.preventDefault();
           act(e.submitter, async () => {
-            const res = await api.post('/volunteer/login', {
-              name: $('#vName', body).value, role: $('#vRole', body).value,
-              area: $('#vArea', body).value, code: $('#vCode', body).value
-            });
+            const res = await api.post('/volunteer/login', { role: $('#vRole', body).value, area: $('#vArea', body).value });
             prefs.volunteer = { token: res.token, ...res.volunteer };
             savePrefs();
             closeModal({ silent: true });
@@ -702,6 +740,7 @@
                 <button type="submit" class="btn btn-primary"><span data-i18n="send"></span></button>
                 <button type="button" class="btn btn-secondary" id="askUploadBtn"><span data-i18n="upload"></span></button>
               </div>
+              <p class="cf-promise" id="askPromise"></p>
               <div class="cf-shot" id="askImgPrev" hidden></div>
               <p class="cf-help" id="askHelp"></p>
             </form>
@@ -789,6 +828,7 @@
       $$('[data-i18n-label]', screen).forEach(el => { el.setAttribute('aria-label', say(el.dataset.i18nLabel)); });
       const call = n => `<a href="tel:${n}">${n}</a>`;
       $('#askHelp').innerHTML = esc(say('help')).replace('{999}', call('999')).replace('{1799}', call('1799'));
+      $('#askPromise').textContent = t('A volunteer usually replies within {n} seconds.', { n: REPLY_TARGET_SECONDS });
       const rm = $('#askImgPrev button');
       if (rm) { rm.textContent = say('remove'); $('#askImgPrev img').alt = say('shotAlt'); }
       const name = userName();
@@ -912,6 +952,31 @@
     }
   }
 
+  /* How long a resident should expect to wait for a volunteer's first reply. The simulated
+     volunteer (server/src/bot.js) answers well inside this; a human volunteer may take longer. */
+  const REPLY_TARGET_SECONDS = 30;
+
+  /* Countdown on each case still waiting for its first reply. When it runs out, the
+     resident is pointed to Ask AI and the helpline instead of being left waiting. */
+  let waitTimer = null;
+  function tickWaits() {
+    const els = $$('[data-wait-since]');
+    if (!els.length) { clearInterval(waitTimer); waitTimer = null; return; }
+    els.forEach(el => {
+      const left = Math.ceil(REPLY_TARGET_SECONDS - (Date.now() - new Date(el.dataset.waitSince)) / 1000);
+      const late = left <= 0;
+      const html = late
+        ? th('Taking longer than usual. {ai}Ask AI{/ai} while you wait, or call the ScamShield Helpline {1799}.', { ai: '<a href="#/ai">', '/ai': '</a>', 1799: telLink('1799') })
+        : tx('A volunteer will reply within {n} seconds.', { n: left });
+      if (el.dataset.shown !== html) { el.innerHTML = html; el.dataset.shown = html; }
+      el.classList.toggle('is-late', late);
+    });
+  }
+  function startWaits() {
+    tickWaits();
+    if (!waitTimer && $('[data-wait-since]')) waitTimer = setInterval(tickWaits, 1000);
+  }
+
   /* [label, Broadsheet tag variant] */
   const VERDICTS = {
     scam: ['Scam', 'tag-accent-2'],
@@ -964,6 +1029,7 @@
                 <p>${written(m.body, { br: true })}</p>
                 <time>${timeAgo(m.at)}</time>
               </div>`).join('')}
+            ${c.status === 'waiting' && !vol ? `<p class="case-wait" data-wait-since="${esc(c.created)}"></p>` : ''}
             ${c.status === 'waiting' && c.volunteer && !vol ? `<div class="msg msg-system typing">${tx('{name} is typing', { name: c.volunteer.name })}<span class="dots"><i></i><i></i><i></i></span></div>` : ''}
           </div>
           ${c.status !== 'resolved' ? `
@@ -985,6 +1051,7 @@
           </footer>
         </article>`;
     }).join('');
+    startWaits();
 
     if (focused) {
       const t = $(`textarea[data-case="${CSS.escape(focused)}"]`, list);
@@ -2824,7 +2891,8 @@
     const passed = all.filter(x => x.p.passed).length;
     const next = all.find(x => !x.p.passed);
     const count = st => st === 'all' ? all.length : all.filter(x => courseStatus(x.p) === st).length;
-    const levels = [...new Set(KW.COURSES.map(c => c.level))];
+    const LEVEL_ORDER = ['For everyone', 'Beginner', 'Intermediate'];
+    const levels = [...new Set(KW.COURSES.map(c => c.level))].sort((a, b) => LEVEL_ORDER.indexOf(a) - LEVEL_ORDER.indexOf(b));
     const filter = (st, label) => `
       <li><button type="button" class="cm-topic" data-status="${st}" aria-pressed="${learnView.status === st}">
         <span>${tx(label)}</span><span class="cm-topic-n" aria-label="${tx('{n} courses', { n: count(st) })}">${count(st)}</span>
@@ -3079,6 +3147,8 @@
       p.score = Math.max(p.score || 0, score);
       if (pass) p.passed = true;
       savePrefs();
+      // The server marks it again and remembers the pass; volunteers need the Intermediate courses.
+      api.post('/learn/quiz', { course: course.id, answers }).catch(() => {});
       const nextCourse = KW.COURSES.find(c => !courseProgress(c.id).passed);
       $('#quizResult').innerHTML = `
         <p class="game-verdict ${pass ? 'is-right' : 'is-wrong'}">${pass ? tx('You passed, {n} of {total}.', { n: score, total: course.quiz.length }) : tx('{n} of {total}. So close.', { n: score, total: course.quiz.length })}</p>

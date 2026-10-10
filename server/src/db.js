@@ -179,6 +179,23 @@ CREATE TABLE IF NOT EXISTS pause_links (
   created_at TEXT NOT NULL
 );
 
+-- Courses a resident has passed. The server marks the quiz; volunteers need the Intermediate ones.
+CREATE TABLE IF NOT EXISTS course_passes (
+  client_id  TEXT NOT NULL,
+  course_id  TEXT NOT NULL,
+  score      INTEGER NOT NULL,
+  passed_at  TEXT NOT NULL,
+  PRIMARY KEY (client_id, course_id)
+);
+
+-- Who a volunteer really is. In this prototype it's a demo stand-in for Singpass (method 'singpass-demo').
+CREATE TABLE IF NOT EXISTS identity_checks (
+  client_id   TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  method      TEXT NOT NULL,
+  verified_at TEXT NOT NULL
+);
+
 -- AI translations of what residents write, so each text is only translated once per language.
 CREATE TABLE IF NOT EXISTS translations (
   lang       TEXT NOT NULL,

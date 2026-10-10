@@ -12,14 +12,14 @@ Most anti-scam tools work **before** a scam (education, call filtering) or **aft
 | **Scam Drills** (on the Pause page) | Practising the habit | Circle members send a **safe practice scam** (parcel fee SMS, fake police officer, "new number" from family and more). It pops up like a real message: pressing Pause or deleting it passes; tapping the link shows a 30-second lesson. The Circle sees the result. Volunteers turn a **verified Scam Radar wave into this week's drill for a whole town** with one button, and see pass rates by town. |
 | **Home-screen app** | One tap during a scam | The site installs on phones like an app (its own chili-red icon, no browser bar). The icon opens on the big **Pause** button, so help is two taps away, and the rest of the app works as normal. Pressing Pause starts a **5-second countdown** (*Send now* or *Cancel*); it sends by itself if nothing is tapped. **Emergency-button mode** (a setting on the Pause page, off by default) makes opening the app start the countdown straight away, for a phone used only for emergencies. Android also gets a long-press **Pause now** shortcut. Works offline enough to show the helplines. Installing needs an `https://` address (or `localhost`). |
 | **Emergency link** | Pause without opening the app | On the Pause page, residents make a private link that can only press Pause for them. On iPhone it goes into a Shortcuts action, so **double-tapping the back of the phone (Back Tap)** or **"Hey Siri, Kampung Pause"** starts the 5-second countdown, even during a call. The link works from any browser (iPhone shortcuts open Safari, which doesn't share the home-screen app's data), then shows who's been alerted and who is calling. The server stores only a hash of it; making a new link or turning it off stops the old one. |
-| **Check a message** | "Ask a Neighbour" live help | One-tap *Is this a scam?*, paste a message or upload a screenshot, get an instant red-flag check, and chat with a volunteer who replies within minutes. Seniors can request a **call back** in their language or tap to call the 1799 helpline. |
+| **Check a message** | "Ask a Neighbour" live help | One-tap *Is this a scam?*, paste a message or upload a screenshot, get an instant red-flag check, and chat with a volunteer, who usually replies within 30 seconds (a live countdown shows on the case; if it runs out, it points to Ask AI and the 1799 helpline). Anyone can request a **call back** in their language or tap to call the 1799 helpline. |
 | **Scam Radar** | Neighbourhood Scam Radar | Live map and feed of anonymised scam reports by town. Reports start as *awaiting verification* until CC/RC volunteers verify them, so rumours don't spread. Choose your area to get **alerts** the moment a scam wave is verified there. |
 | **Community** | Reddit-style forum | Post questions with photos, upvote and downvote, threaded replies, topics (Is this a scam? / Scam alert / Tips / Debate / My story), community polls and volunteer-verified verdicts. |
 | **Learn** | Online courses | Six short courses with lessons, quizzes and badges, plus a *Spot the scam* mini-game. |
 
 **Ask AI** (its own page, linked from the header): residents chat with an AI (Google Gemini on its free tier, or Anthropic's Claude) about a suspicious message or screenshot, in English, 华语, Melayu or தமிழ். It points out warning signs and next steps, uses the latest verified Scam Radar reports, and can hand the conversation to a volunteer as a case. It needs an API key (see Configuration); without one it shows "not switched on yet".
 
-**Volunteer mode** (the "Volunteer sign in" button in the header) requires a volunteer access code. Volunteers get a shared inbox of resident cases. They can reply, set verdicts, verify or dismiss Radar reports, and mark community posts as scam or legit.
+**Volunteer mode** (the "Volunteer sign in" button in the header) takes three steps, so residents know every volunteer is real and trained: confirm who you are (a **Singpass demo** in this prototype; a real launch would use Singpass login), pass both **Intermediate** courses in Learn (the server marks the quizzes), then choose a role and area. The volunteer signs in under their confirmed name. Volunteers get a shared inbox of resident cases. They can reply, set verdicts, verify or dismiss Radar reports, and mark community posts as scam or legit.
 
 ## Run it
 
@@ -49,7 +49,6 @@ Copy `server/.env.example` to `server/.env` to change settings:
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `3000` | Port for the site and API |
-| `VOLUNTEER_CODE` | `kampung2026` | Code volunteers enter to sign in. **Change it before sharing the site.** |
 | `AUTO_REPLY` | `true` | A simulated volunteer answers new cases, and steps into escalated Pauses, if no human does first (useful for demos) |
 | `PAUSE_ESCALATE_SECONDS` | `90` | How long a resident's Circle has to answer a Pause before volunteers are alerted. Shorten it for a live demo. |
 | `DATA_DIR` | `server/data` | Where the SQLite database and uploaded images are stored |
@@ -58,6 +57,8 @@ Copy `server/.env.example` to `server/.env` to change settings:
 | `ANTHROPIC_API_KEY` | (empty) | Paid key from console.anthropic.com, if you use Claude. Never commit it. |
 | `ASSISTANT_DAILY_LIMIT` | `500` | Most assistant replies per day for the whole site, to cap cost |
 | `TRANSLATE_DAILY_LIMIT` | `1000` | Most AI translation requests per day (posts, comments and reports read in 华语, Malay or Tamil) |
+| `SEALION_API_KEY` | (empty) | Free key from playground.sea-lion.ai. When set, posts are translated with SEA-LION (AI Singapore's model for Southeast Asian languages), with the AI above as backup. |
+| `SEALION_MODEL` | `aisingapore/Qwen-SEA-LION-v4.5-27B-IT` | SEA-LION model used for translating |
 | `TRANSLATE_MODEL` | `gemini-flash-lite-latest` | Gemini model used for translating (lighter and faster than the assistant's) |
 | `ASSISTANT_MODEL` | `gemini-flash-latest` / `claude-opus-5-5` | Model the assistant uses |
 
@@ -84,7 +85,7 @@ Express server (server/src)
 ### Identity (prototype level)
 
 - **Residents** are anonymous. Each browser generates a random ID and sends it as the `X-Client-Id` header. That ID controls "my cases" and votes, and is shown publicly as a handle like `Resident-4821`.
-- **Volunteers** sign in with a name, role, area and the shared `VOLUNTEER_CODE`. They get a session token (12 hours), sent as `Authorization: Bearer <token>`. Only a hash of the token is stored.
+- **Volunteers** sign in once they have a confirmed identity (Singpass demo) and have passed the Intermediate courses; the server checks both. They get a session token (12 hours), sent as `Authorization: Bearer <token>`. Only a hash of the token is stored.
 
 A real launch would need proper accounts, for example Singpass for residents and individual volunteer logins approved by the CC.
 

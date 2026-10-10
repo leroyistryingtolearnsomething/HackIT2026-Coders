@@ -6,13 +6,11 @@ const { config } = ctx;
 const server = app.listen(config.port, () => {
   console.log(`Kampung Watch running at http://localhost:${config.port}`);
   console.log(`Data stored in ${config.dataDir}`);
-  if (config.usingDefaultCode) {
-    console.warn('WARNING: Using the default volunteer code "kampung2026". Set VOLUNTEER_CODE in server/.env before sharing the site.');
-  }
   if (config.autoReply) console.log('Simulated volunteer replies are ON (set AUTO_REPLY=false to disable).');
   console.log(config.assistantEnabled
     ? `AI assistant is ON (${config.aiProvider}, model ${config.assistantModel}, up to ${config.assistantDailyLimit} replies a day).`
     : 'AI assistant is OFF. Add GEMINI_API_KEY (free) or ANTHROPIC_API_KEY to server/.env and restart to turn it on.');
+  if (config.seaLionEnabled) console.log(`Posts are translated with SEA-LION (${config.seaLionModel})${config.assistantEnabled ? `, with ${config.aiProvider} as backup` : ''}.`);
 });
 
 server.on('error', err => {

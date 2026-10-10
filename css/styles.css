@@ -190,6 +190,18 @@ main { outline: none; }
 .form-grid .full { grid-column: 1 / -1; }
 .form-grid p { margin: 0; }
 .form-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); }
+
+/* Becoming a volunteer: three steps, each ticked when done. */
+.vol-steps { list-style: none; margin: var(--space-4) 0 0; padding: 0; display: flex; flex-direction: column; }
+.vol-step { padding: var(--space-4) 0; border-top: 1px solid color-mix(in srgb, var(--color-text) 18%, transparent); }
+.vol-step h3 { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); font-size: 1.125rem; }
+.vol-step-mark { flex: none; width: 1.5rem; height: 1.5rem; border: 1px solid var(--color-text); border-radius: 50%; display: inline-grid; place-items: center; font-size: 0.875rem; }
+.vol-step.is-done .vol-step-mark { background: var(--color-accent-700); border-color: var(--color-accent-700); color: #fff; }
+.vol-verify { display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-start; }
+.vol-verify .field { width: 100%; }
+.vol-step p { margin: 0; }
+.vol-courses { list-style: none; margin: 0; padding: 0; }
+.vol-courses li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; }
 .img-picker { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 .img-preview:empty { display: none; }
 .img-preview { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); }
@@ -278,6 +290,9 @@ body.route-ask .fab { display: none; }
 .cf-shot[hidden] { display: none; }
 .cf-shot img { max-height: 7.5rem; width: auto; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
 .cf-help, .cf-note { color: var(--ink-78); }
+.cf-promise { margin: var(--space-2) 0 0; font-weight: 600; color: var(--color-accent-700); }
+.case-wait { margin: 0; font-size: 0.9375rem; color: var(--ink-78); }
+.case-wait.is-late { color: var(--color-text); }
 .cf-help { font-size: 1.0625rem; line-height: 1.625rem; }
 .cf-help a {
   color: var(--color-text); font-weight: 600; text-decoration: none;

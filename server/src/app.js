@@ -19,6 +19,7 @@ import pausesRouter from './routes/pauses.js';
 import drillsRouter from './routes/drills.js';
 import pauseLinksRouter from './routes/pauseLinks.js';
 import translateRouter from './routes/translate.js';
+import learnRouter from './routes/learn.js';
 import { createPauseWatch } from './models/pauses.js';
 
 export function createApp(overrides = {}) {
@@ -65,6 +66,7 @@ export function createApp(overrides = {}) {
   api.use('/drills', drillsRouter(ctx));
   api.use('/pause-link', pauseLinksRouter(ctx));
   api.use('/translate', translateRouter(ctx));
+  api.use('/learn', learnRouter(ctx));
   api.use((req, res, next) => next(new HttpError(404, 'No such API endpoint')));
   api.use((err, req, res, next) => {
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'That upload is too large.' });
