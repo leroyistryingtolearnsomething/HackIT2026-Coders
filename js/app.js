@@ -100,6 +100,7 @@
       }
       el.removeAttribute('data-written');
     });
+    markClamped();
     if ($('[data-written]')) translateWritten();
   }
 
@@ -2041,6 +2042,19 @@
      SCAM RADAR
      ========================================================= */
   const radarFilter = { town: '', type: '', days: 30, verifiedOnly: false };
+  /* The feed shows reports a page at a time; a long description shows 3 lines until opened. */
+  const RADAR_PAGE = 30;
+  let radarShown = RADAR_PAGE;
+  const radarOpen = new Set(); // ids of reports whose full description is showing
+
+  /* Show a "Show more" link only where clamped text is really cut off (it depends on width and language). */
+  function markClamped(scope = document) {
+    $$('[data-more]', scope).forEach(b => {
+      const el = document.getElementById(b.getAttribute('aria-controls'));
+      if (el) b.hidden = el.classList.contains('is-clamped') && el.scrollHeight <= el.clientHeight + 1;
+    });
+  }
+  window.addEventListener('resize', debounce(() => markClamped(), 200));
 
   function filteredReports() {
     return cache.reports
@@ -2094,6 +2108,7 @@
 
   function drawRadarPage() {
     if (map) { map.remove(); map = null; markerLayer = null; }
+    radarShown = RADAR_PAGE;
     const sub = prefs.subscription;
     const [line1, line2] = radarHeadline();
     const newest = [...cache.reports].sort(byNewest)[0];
@@ -2181,6 +2196,7 @@
 
     const bind = (id, key, cast) => $(id).addEventListener('change', e => {
       radarFilter[key] = cast(e.target);
+      radarShown = RADAR_PAGE;
       updateRadar();
     });
     bind('#fTown', 'town', el => el.value);
@@ -2222,6 +2238,7 @@
       feed.innerHTML = `<div class="empty"><p>${tx('No reports match these filters.')}</p><button type="button" class="btn btn-secondary" id="clearFilters">${tx('Clear filters')}</button></div>`;
       $('#clearFilters').addEventListener('click', () => {
         Object.assign(radarFilter, { town: '', type: '', days: 30, verifiedOnly: false });
+        radarShown = RADAR_PAGE;
         drawRadarPage();
       });
       return;
@@ -2233,17 +2250,18 @@
           <th scope="col" class="num">${tx('Neighbours hit')}</th><th scope="col"><span class="sr-only">${tx('Actions')}</span></th>
         </tr></thead>
         <tbody>
-          ${reports.map(r => `
+          ${reports.slice(0, radarShown).map(r => `
             <tr id="rep-${esc(r.id)}">
               <td class="r-main">
                 <span class="r-title">${written(r.title)}</span>
                 <span class="r-detail">${tx(r.type)} · ${tx(r.channel)} · ${timeAgo(r.created)}</span>
-                ${r.desc ? `<span class="r-desc">${written(r.desc, { br: true })}</span>` : ''}
+                ${r.desc ? `<span class="r-desc ${radarOpen.has(r.id) ? '' : 'is-clamped'}" id="rd-${esc(r.id)}">${written(r.desc, { br: true })}</span>
+                  <button type="button" class="r-more" data-more="${esc(r.id)}" aria-controls="rd-${esc(r.id)}" aria-expanded="${radarOpen.has(r.id)}" hidden>${radarOpen.has(r.id) ? tx('Show less') : tx('Show more')}</button>` : ''}
                 ${r.image ? `<img class="r-img" src="${esc(r.image)}" alt="${tx('Screenshot attached to this report')}">` : ''}
               </td>
               <td data-label="${tx('Town')}">${esc(placeName(r.town))}</td>
               <td data-label="${tx('Status')}"><span class="r-status">${STATUS_TAG[r.status](r)}</span></td>
-              <td class="num" data-label="${tx('Neighbours hit')}"><span class="r-count">${r.count}</span></td>
+              <td class="num" data-label="${tx('Neighbours hit')}"><span class="r-count">${num(r.count)}</span></td>
               <td class="r-actions">
                 <button type="button" class="btn ${r.mine ? 'btn-primary' : 'btn-secondary'}" data-confirm="${esc(r.id)}" aria-pressed="${r.mine}">${r.mine ? tx('You got this too') : tx('I got this too')}</button>
                 <button type="button" class="btn btn-ghost" data-discuss="${esc(r.id)}">${tx('Discuss')}</button>
@@ -2253,7 +2271,31 @@
               </td>
             </tr>`).join('')}
         </tbody>
-      </table>`;
+      </table>
+      ${reports.length > radarShown ? `
+        <div class="radar-more">
+          <p class="muted">${tx('Showing {n} of {total} reports', { n: radarShown, total: reports.length })}</p>
+          <button type="button" class="btn btn-secondary" id="radarMore">${tx('Show {n} more', { n: Math.min(RADAR_PAGE, reports.length - radarShown) })}</button>
+        </div>` : ''}`;
+
+    const moreBtn = $('#radarMore');
+    if (moreBtn) moreBtn.addEventListener('click', () => {
+      const first = radarShown;
+      radarShown += RADAR_PAGE;
+      renderRadarFeed(reports);
+      // Keep the reader's place: move focus to the first newly shown report.
+      const row = $$('.radar-table tbody tr', feed)[first];
+      if (row) { row.tabIndex = -1; row.focus({ preventScroll: true }); }
+    });
+    $$('[data-more]', feed).forEach(b => b.addEventListener('click', () => {
+      const id = b.dataset.more;
+      const open = !radarOpen.has(id);
+      if (open) radarOpen.add(id); else radarOpen.delete(id);
+      document.getElementById(b.getAttribute('aria-controls')).classList.toggle('is-clamped', !open);
+      b.setAttribute('aria-expanded', String(open));
+      b.textContent = open ? t('Show less') : t('Show more');
+    }));
+    markClamped(feed);
 
     const run = (attr, fn) => $$(`[data-${attr}]`, feed).forEach(b => b.addEventListener('click', () =>
       act(b, () => fn(encodeURIComponent(b.dataset[attr])))));
@@ -2304,6 +2346,7 @@
       if (btn) btn.addEventListener('click', () => {
         radarFilter.town = btn.dataset.town;
         $('#fTown').value = radarFilter.town;
+        radarShown = RADAR_PAGE;
         map.closePopup();
         updateRadar();
         $('#feedTitle').scrollIntoView({ behavior: 'smooth' });
