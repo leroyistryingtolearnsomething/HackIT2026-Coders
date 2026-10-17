@@ -165,7 +165,10 @@ body { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-are
 .nav-toggle { display: none; }
 .vol-strip { margin: 0; padding: var(--space-2) var(--gutter); background: var(--color-accent-100); color: var(--color-accent-900); }
 
-.alert-banner { position: sticky; top: 0; z-index: 45; background: var(--color-accent-2-100); color: var(--color-accent-2-900); }
+.alert-banner { position: sticky; top: 0; z-index: 45; background: var(--color-accent-2-100); color: var(--color-accent-2-900); transition: transform 250ms var(--ease-out), opacity 250ms var(--ease-out); }
+/* Arrives from the top edge it's pinned to, so it reads as news arriving, not the page jumping. */
+@starting-style { .alert-banner { transform: translateY(-100%); opacity: 0; } }
+.alert-banner.leaving { transform: translateY(-100%); opacity: 0; transition-duration: 150ms; }
 .alert-inner { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--gutter); }
 .alert-inner p { margin: 0; flex: 1 1 24ch; }
 
@@ -194,6 +197,7 @@ main { outline: none; }
   opacity: 0; transform: translateY(var(--space-2)); transition: opacity 250ms var(--ease-out), transform 250ms var(--ease-out); pointer-events: auto;
 }
 .toast.show { opacity: 1; transform: none; }
+.toast.leaving { transition-duration: 150ms; } /* the system responding: faster out than in */
 .toast a { color: var(--color-accent-200); font-weight: 600; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; }
 .toast-warn { background: var(--color-accent-2-800); }
 
@@ -210,6 +214,7 @@ main { outline: none; }
   .dialog-backdrop { opacity: 0; }
   .dialog { opacity: 0; transform: scale(0.97); }
 }
+.dialog-backdrop.no-enter, .no-enter .dialog { transition: none; } /* same dialog, new content: no second entrance */
 .dialog-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
 .dialog-title { font-size: 1.75rem; line-height: 2.125rem; margin: 0; }
 
@@ -318,7 +323,7 @@ body.route-ask .fab { display: none; }
 .cf-shot img { max-height: 7.5rem; width: auto; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
 .cf-help, .cf-note { color: var(--ink-78); }
 .cf-promise { margin: var(--space-2) 0 0; font-weight: 600; color: var(--color-accent-700); }
-.case-wait { margin: 0; font-size: 0.9375rem; color: var(--ink-78); }
+.case-wait { margin: 0; font-size: 0.9375rem; color: var(--ink-78); font-variant-numeric: tabular-nums; }
 .case-wait.is-late { color: var(--color-text); }
 .cf-help { font-size: 1.0625rem; line-height: 1.625rem; }
 .cf-help a {
@@ -818,6 +823,10 @@ body.route-ask .fab { display: none; }
 .launch-title { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 2rem; line-height: 2.5rem; margin: 0; color: var(--color-accent-2-700); }
 .launch-count { display: inline-block; min-width: 1ch; font-size: 3rem; font-variant-numeric: tabular-nums; }
 .launch-who { font-size: 1.125rem; line-height: 1.75rem; }
+/* Drains over the 5 seconds at a constant rate (linear: it's a clock, not a movement). */
+.launch-bar { display: block; height: 6px; border-radius: 999px; overflow: hidden; background: var(--color-accent-2-100); }
+.launch-bar span { display: block; height: 100%; background: var(--color-accent-2-700); transform-origin: left; animation: launch-drain 5s linear forwards; }
+@keyframes launch-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .launch-actions { display: flex; flex-direction: column; gap: var(--space-2); }
 .launch-actions .btn { width: 100%; min-height: 3.5rem; font-size: 1.1875rem; white-space: normal; }
 
@@ -917,6 +926,9 @@ body.route-ask .fab { display: none; }
   /* Fades stay (they explain what appeared); nothing moves or scales. */
   .btn:active:not(:disabled), .cm-vote-btn:active, .cm-poll-opt:active, .poll-opt:active, .sign-btn:active, .cm-topic:active, .pause-btn:active { transform: none; }
   .toast { transform: none; }
+  @starting-style { .alert-banner { transform: none; } }
+  .alert-banner.leaving { transform: none; }
+  .launch-bar { display: none; }
   @starting-style { .dialog { transform: none; } }
 }
 

@@ -216,17 +216,34 @@
     el.innerHTML = `<span>${esc(msg)}</span>${link ? `<a href="${esc(link)}">${esc(linkText || t('View'))}</a>` : ''}`;
     $('#toasts').appendChild(el);
     requestAnimationFrame(() => el.classList.add('show'));
-    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 5000);
+    // The 5 seconds only count while the page is visible and the toast isn't being read
+    // (pointer over it, or keyboard focus on its link), so an alert is never missed.
+    let left = 5000, started = 0, timer = null;
+    const hide = () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      el.classList.add('leaving');
+      el.classList.remove('show');
+      setTimeout(() => el.remove(), 200);
+    };
+    const run = () => { if (timer || document.hidden) return; started = Date.now(); timer = setTimeout(hide, left); };
+    const hold = () => { if (!timer) return; clearTimeout(timer); timer = null; left -= Date.now() - started; };
+    const onVisible = () => (document.hidden ? hold() : run());
+    el.addEventListener('pointerenter', hold);
+    el.addEventListener('pointerleave', run);
+    el.addEventListener('focusin', hold);
+    el.addEventListener('focusout', run);
+    document.addEventListener('visibilitychange', onVisible);
+    run();
   }
 
   let lastFocus = null;
   let onModalClose = null;
-  function openModal({ title, body, onMount, onClose, wide = false }) {
+  function openModal({ title, body, onMount, onClose, wide = false, animate = true }) {
     const root = $('#modal');
-    lastFocus = document.activeElement;
+    if (root.hidden) lastFocus = document.activeElement; // redrawing an open dialog keeps the original return point
     onModalClose = onClose || null;
     root.innerHTML = `
-      <div class="dialog-backdrop">
+      <div class="dialog-backdrop ${animate ? '' : 'no-enter'}">
         <div class="dialog ${wide ? 'dialog-wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
           <header class="dialog-head">
             <h2 class="dialog-title" id="modalTitle">${esc(title)}</h2>
@@ -439,7 +456,7 @@
   /* Becoming a volunteer: confirm who you are (Singpass in a real launch, a demo here),
      pass the Intermediate courses in Learn, then choose a role and area. The server
      checks both steps, so residents know every volunteer is real and trained. */
-  async function openVolunteerLogin() {
+  async function openVolunteerLogin({ animate = true } = {}) {
     const roles = (cache.config && cache.config.volunteerRoles) || ['Digital Ambassador', 'RC Volunteer', 'Student Volunteer', 'CC Scam-Buster'];
     let steps;
     try {
@@ -450,6 +467,7 @@
     }
     const tick = done => `<span class="vol-step-mark" aria-hidden="true">${done ? '✓' : ''}</span>`;
     openModal({
+      animate,
       title: t('Become a volunteer'),
       body: `
         <p class="muted">${tx('Volunteers answer cases, verify Scam Radar reports and give verdicts in the community. So residents can trust them, every volunteer confirms who they are and passes the Intermediate courses first.')}</p>
@@ -492,8 +510,7 @@
           e.preventDefault();
           act(e.submitter, async () => {
             await api.post('/volunteer/verify', { name: $('#vName', body).value });
-            closeModal({ silent: true });
-            openVolunteerLogin(); // redraw with step 1 ticked
+            openVolunteerLogin({ animate: false }); // redraw in place with step 1 ticked
           });
         });
         $('#volForm', body).addEventListener('submit', e => {
@@ -1451,6 +1468,7 @@
         <p class="kicker">${tx('Pause')}</p>
         <h2 class="launch-title" id="launchTitle">${th(people.length ? 'Alerting your Circle in {n}' : 'Alerting volunteers in {n}', { n: '<span class="launch-count" id="launchCount">5</span>' })}</h2>
         <p class="launch-who" id="launchWho">${esc(who)}</p>
+        <span class="launch-bar" aria-hidden="true"><span></span></span>
         <div class="launch-actions">
           <button type="button" class="btn btn-primary btn-lg" id="launchNow">${tx('Send now')}</button>
           <button type="button" class="btn btn-secondary btn-lg" id="launchCancel">${tx('Cancel, I tapped by mistake')}</button>
@@ -1923,6 +1941,11 @@
   }
 
   /* ---------- live updates, on any page ---------- */
+  function hideBanner(banner) {
+    banner.classList.add('leaving');
+    setTimeout(() => { banner.hidden = true; banner.classList.remove('leaving'); }, 150);
+  }
+
   function showPauseBanner(p) {
     const banner = $('#alertBanner');
     banner.className = 'alert-banner alert-pause';
@@ -1933,7 +1956,8 @@
         <button type="button" class="btn btn-ghost" id="alertClose">${tx('Dismiss')}</button>
       </div>`;
     banner.hidden = false;
-    $('#alertClose').addEventListener('click', () => { banner.hidden = true; });
+    buzz(); // same moment as the banner arrives
+    $('#alertClose').addEventListener('click', () => hideBanner(banner));
     $('#alertView').addEventListener('click', () => { banner.hidden = true; });
     if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
       try { new Notification(t('{name} pressed Pause.', { name: p.name }), { body: t('Open Kampung Watch to call them.') }); } catch (e) { /* ignore */ }
@@ -2442,7 +2466,7 @@
         <button type="button" class="btn btn-ghost" id="alertClose">${tx('Dismiss')}</button>
       </div>`;
     banner.hidden = false;
-    $('#alertClose').addEventListener('click', () => { banner.hidden = true; });
+    $('#alertClose').addEventListener('click', () => hideBanner(banner));
     $('#alertView').addEventListener('click', () => {
       banner.hidden = true;
       radarFilter.town = r.town;
