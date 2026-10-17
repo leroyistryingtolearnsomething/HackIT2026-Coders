@@ -36,6 +36,15 @@
   --color-accent-2-400: #e07a63;
   --color-accent-2-500: #cf5640;
   --color-accent-2-900: #46160e;
+
+  /* Kaya: the ochre of kaya toast, the third kopitiam colour. It means "not known yet":
+     a report awaiting a volunteer's check, a case waiting for a reply, a "Suspicious"
+     verdict, a question. Pandan stays for safe and act, chili for scam and Pause. */
+  --color-kaya-100: #f8eccf;
+  --color-kaya-200: #f1d9a2;
+  --color-kaya-600: #9a6b0e;   /* 4.1:1 on the page: map rings and swatches */
+  --color-kaya-700: #7a530a;   /* 6.0:1: text and outlines */
+  --color-kaya-800: #5a3c07;   /* 8.6:1 on kaya-100: text in kaya tags */
 }
 
 :root {
@@ -51,6 +60,39 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 }
+
+/* ---------- Typography ----------
+   One family, Source Serif 4, does every Latin job; size, weight and space tell the roles apart.
+   Roles: display (page titles), title (sections), subtitle (cards, posts), lead, body 17px,
+   meta 16px, and label: small capitals for the newspaper headers over lists and tables.
+
+   Until the web font arrives, a local serif is resized to Source Serif's measurements
+   (taken in the browser), so text doesn't jump when it swaps in. Times New Roman matches
+   its width almost exactly; Georgia runs about 9% wider. */
+@font-face { font-family: "Source Serif Fallback"; src: local("Times New Roman"), local("TimesNewRomanPSMT"); size-adjust: 100%; ascent-override: 104%; descent-override: 34%; line-gap-override: 0%; }
+@font-face { font-family: "Source Serif Fallback Georgia"; src: local("Georgia"); size-adjust: 91%; ascent-override: 114%; descent-override: 37%; line-gap-override: 0%; }
+:root {
+  --font-heading: "Source Serif 4", "Source Serif Fallback", "Source Serif Fallback Georgia", serif;
+  --font-body: var(--font-heading);
+}
+/* Chinese and Tamil glyphs aren't in Source Serif, so each script names its own faces
+   (Latin letters and numbers in the same line still use Source Serif). Headings take
+   Noto Serif to keep the newspaper voice; Chinese body text stays in the phone's own
+   sans, which reads better than a thin Song face at body sizes. The Noto files load
+   only when that language is chosen (loadScriptFont in app.js). */
+:root:lang(zh) {
+  --font-body: "Source Serif 4", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-heading: "Source Serif 4", "Noto Serif SC", "Songti SC", "Microsoft YaHei", serif;
+}
+:root:lang(ta) {
+  --font-body: "Source Serif 4", "Noto Sans Tamil", "Nirmala UI", "Tamil Sangam MN", "Latha", sans-serif;
+  --font-heading: "Source Serif 4", "Noto Serif Tamil", "Tamil Sangam MN", "Nirmala UI", serif;
+}
+/* Only 400 and 600 are loaded, so bold means 600; a faked 700 smears the serifs. */
+strong, b { font-weight: 600; }
+html { font-synthesis-weight: none; }
+h1, h2, h3, .display, .display-sm, .section-title, .cf-headline, .cm-title, .pause-headline { text-wrap: balance; }
+a { text-underline-offset: .18em; text-decoration-thickness: from-font; }
 
 html {
   scroll-behavior: smooth;
@@ -96,10 +138,15 @@ button, input, select, textarea { font-family: inherit; }
 body:not(.volunteer-on) .vol-only { display: none !important; }
 
 .muted { color: var(--ink-78); }
-.kicker, .cf-kicker {
-  font-family: var(--font-body); font-weight: 400; margin: 0;
-  font-size: .8125rem; line-height: 1rem; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--ink-70);
+.kicker, .cf-kicker, .ai-who, .cm-eyebrow, .radar-table th, .table th {
+  font-family: var(--font-body); font-weight: 600; margin: 0;
+  font-size: .9375rem; line-height: 1.25rem; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-78);
+}
+/* Capitals and tracking mean nothing in Chinese or Tamil; there the label is just a small bold line. */
+:lang(zh) :is(.kicker, .cf-kicker, .ai-who, .cm-eyebrow, .cm-side-title, .radar-table th, .table th),
+:lang(ta) :is(.kicker, .cf-kicker, .ai-who, .cm-eyebrow, .cm-side-title, .radar-table th, .table th) {
+  text-transform: none; letter-spacing: 0; font-size: 1rem; line-height: 1.5rem;
 }
 .lede { font-size: 1.1875rem; line-height: 1.875rem; color: var(--ink-78); margin: 0; max-width: 46ch; }
 
@@ -128,8 +175,12 @@ body:not(.volunteer-on) .vol-only { display: none !important; }
 textarea.input { line-height: 1.75rem; }
 .input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
-.tag { font-size: 1rem; line-height: 1.5rem; padding: 2px var(--space-2); }
+.tag { font-size: 1rem; line-height: 1.5rem; padding: 2px var(--space-2); letter-spacing: 0; }
+.table { font-size: 1.0625rem; } /* Broadsheet's 14px is too small for this audience */
 .tag-outline { border-color: var(--color-accent-700); color: var(--color-accent-700); }
+/* Waiting for someone: a dashed kaya edge, so "not checked yet" reads without colour too. */
+.tag-pending { border: 1px dashed var(--color-kaya-700); color: var(--color-kaya-700); background: transparent; }
+.tag-caution { background: var(--color-kaya-100); color: var(--color-kaya-800); }
 .tag-row { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); }
 
 .seg-opt { min-height: 44px; min-width: 44px; justify-content: center; padding-inline: var(--space-3); font-size: 1.0625rem; }
@@ -230,7 +281,7 @@ main { outline: none; }
 .vol-steps { list-style: none; margin: var(--space-4) 0 0; padding: 0; display: flex; flex-direction: column; }
 .vol-step { padding: var(--space-4) 0; border-top: 1px solid color-mix(in srgb, var(--color-text) 18%, transparent); }
 .vol-step h3 { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); font-size: 1.125rem; }
-.vol-step-mark { flex: none; width: 1.5rem; height: 1.5rem; border: 1px solid var(--color-text); border-radius: 50%; display: inline-grid; place-items: center; font-size: 0.875rem; }
+.vol-step-mark { flex: none; width: 1.5rem; height: 1.5rem; border: 1px solid var(--color-text); border-radius: 50%; display: inline-grid; place-items: center; font-size: 1rem; line-height: 1; font-variant-numeric: lining-nums; }
 .vol-step.is-done .vol-step-mark { background: var(--color-accent-700); border-color: var(--color-accent-700); color: #fff; }
 .vol-verify { display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-start; }
 .vol-verify .field { width: 100%; }
@@ -270,7 +321,8 @@ main { outline: none; }
 
 .stat-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-6); margin-bottom: var(--gap-lg); }
 .stat { display: flex; flex-direction: column; gap: var(--space-1); }
-.stat-n { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 2.5rem; line-height: 2.75rem; overflow-wrap: anywhere; }
+.stat-n { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 2.5rem; line-height: 2.75rem; overflow-wrap: anywhere; font-variant-numeric: lining-nums; }
+.table .num, .r-count, .cm-topic-n, .block-count, .cm-score, .lr-n, .flag-n, .cf-flag-n, .cm-poll-pct, .poll-pct { font-variant-numeric: lining-nums tabular-nums; }
 .stat-label { color: var(--ink-70); line-height: 1.5rem; }
 
 /* The red-flag summary used in posts and the post dialog */
@@ -326,7 +378,7 @@ body.route-ask .fab { display: none; }
 .cf-shot img { max-height: 7.5rem; width: auto; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
 .cf-help, .cf-note { color: var(--ink-78); }
 .cf-promise { margin: var(--space-2) 0 0; font-weight: 600; color: var(--color-accent-700); }
-.case-wait { margin: 0; font-size: 0.9375rem; color: var(--ink-78); font-variant-numeric: tabular-nums; }
+.case-wait { margin: 0; font-size: 1rem; color: var(--ink-78); font-variant-numeric: tabular-nums; }
 .case-wait.is-late { color: var(--color-text); }
 .cf-help { font-size: 1.0625rem; line-height: 1.625rem; }
 .cf-help a {
@@ -368,7 +420,7 @@ body.route-ask .fab { display: none; }
 }
 .duty-who { flex: 1 1 10rem; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
 .duty-name { font-size: 1.125rem; line-height: 1.5rem; font-weight: 600; }
-.duty-meta { font-size: .96875rem; line-height: 1.375rem; color: color-mix(in srgb, var(--color-text) 72%, transparent); }
+.duty-meta { font-size: 1rem; line-height: 1.375rem; color: color-mix(in srgb, var(--color-text) 72%, transparent); }
 .block-row { display: flex; align-items: baseline; gap: .5rem; font-size: 1.0625rem; line-height: 1.625rem; }
 .block-title { color: var(--color-text); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
 @media (hover: hover) and (pointer: fine) { .block-title:hover { text-decoration: underline; } }
@@ -418,7 +470,9 @@ body.route-ask .fab { display: none; }
 .legend span { display: inline-flex; align-items: center; gap: var(--space-2); }
 .swatch { width: 14px; height: 14px; border-radius: 50%; border: 2px solid; display: inline-block; }
 .swatch-verified { border-color: var(--color-accent-2-700); background: color-mix(in srgb, var(--color-accent-2-700) 30%, transparent); }
-.swatch-pending { border-color: var(--color-accent-600); background: color-mix(in srgb, var(--color-accent-600) 30%, transparent); }
+.ink-verified { color: var(--color-accent-2-700); }
+.ink-pending { color: var(--color-kaya-700); }
+.swatch-pending { border-color: var(--color-kaya-600); border-style: dashed; background: color-mix(in srgb, var(--color-kaya-600) 30%, transparent); }
 .leaflet-container { font-family: var(--font-body); font-size: 1rem; }
 .leaflet-popup-content-wrapper { border-radius: var(--radius-md); box-shadow: var(--shadow-md); }
 .leaflet-popup-content { margin: var(--space-3) var(--space-4); line-height: 1.5rem; }
@@ -434,7 +488,7 @@ body.route-ask .fab { display: none; }
 .filters .field { flex: 1 1 12rem; }
 
 .radar-table { font-size: 1.0625rem; }
-.radar-table th { font-size: .8125rem; color: var(--ink-70); padding: var(--space-2) var(--space-3) var(--space-2) 0; white-space: nowrap; }
+.radar-table th { padding: var(--space-2) var(--space-3) var(--space-2) 0; white-space: nowrap; }
 .radar-table .tag, .r-actions .btn { white-space: nowrap; }
 .radar-table td { padding: var(--space-4) var(--space-3) var(--space-4) 0; vertical-align: top; }
 @media (hover: hover) and (pointer: fine) { .radar-table tbody tr:hover { background: none; } }
@@ -444,7 +498,7 @@ body.route-ask .fab { display: none; }
 .r-detail { display: block; color: var(--ink-70); font-size: 1rem; }
 .r-desc { display: block; margin-top: var(--space-2); color: var(--ink-78); max-width: 60ch; overflow-wrap: anywhere; }
 .r-desc.is-clamped { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
-.r-more { display: inline-flex; align-items: center; min-height: 44px; padding: 0; border: 0; background: none; font: inherit; font-size: .9375rem; color: var(--color-accent-700); text-decoration: underline; cursor: pointer; }
+.r-more { display: inline-flex; align-items: center; min-height: 44px; padding: 0; border: 0; background: none; font: inherit; font-size: 1rem; color: var(--color-accent-700); text-decoration: underline; cursor: pointer; }
 .r-more[hidden] { display: none; } /* the display above would otherwise override [hidden] */
 .radar-more { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-6) 0 var(--space-2); }
 .radar-more p { margin: 0; }
@@ -467,13 +521,13 @@ body.route-ask .fab { display: none; }
 }
 .cm-head-text { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
 .cm-head-text p { margin: 0; }
-.cm-eyebrow { font-size: .875rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--color-accent-700); }
+.cm-eyebrow { color: var(--color-accent-700); }
 .cm-title { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 2.5rem; line-height: 3rem; letter-spacing: -0.01em; margin: 0; }
 .cm-desc { font-size: 1.0625rem; color: var(--ink-78); }
 .cm-new { white-space: nowrap; }
 
 /* Note above posts and reports translated by AI, with a link back to the original words. */
-.written-note { font-size: 0.9375rem; color: var(--ink-78); margin: var(--space-3) 0 var(--space-4); }
+.written-note { font-size: 1rem; color: var(--ink-78); margin: var(--space-3) 0 var(--space-4); }
 .written-toggle { background: none; border: 0; padding: 0; font: inherit; color: var(--color-accent-700); text-decoration: underline; cursor: pointer; }
 
 .cm-body { max-width: var(--page-max); margin-inline: auto; padding: 0 2.5rem var(--bottom); display: flex; flex-wrap: wrap; align-items: flex-start; }
@@ -681,7 +735,7 @@ body.route-ask .fab { display: none; }
 .assistant-suggest .btn { text-align: left; font-family: var(--font-body); font-weight: 400; }
 .ai-msg { display: flex; flex-direction: column; gap: var(--space-1); max-width: 85%; }
 .ai-msg p { overflow-wrap: anywhere; }
-.ai-who { font-size: .8125rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-70); }
+.ai-who { color: var(--ink-70); }
 .ai-user { align-self: flex-end; align-items: flex-end; }
 .ai-user p { background: var(--color-accent-700); color: var(--color-bg); padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); font-size: 1.125rem; line-height: 1.75rem; }
 .ai-assistant p { font-size: 1.25rem; line-height: 2rem; max-width: 62ch; }
@@ -958,6 +1012,7 @@ body.route-ask .fab { display: none; }
   .display, .cf-headline { font-size: 2.5rem; line-height: 2.875rem; }
   .display-sm { font-size: 2rem; line-height: 2.5rem; }
   .section-title { font-size: 1.625rem; line-height: 2.125rem; }
+  .stat-n { font-size: 2rem; line-height: 2.375rem; } /* a town name like "Tampines" fits half the phone width */
 
   /* Stacks as: input, results, neighbours on duty, block alerts. */
   .check-first { --cf-gutter: var(--space-4); --cf-top: var(--space-6); }

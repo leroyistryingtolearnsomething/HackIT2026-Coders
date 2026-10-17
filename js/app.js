@@ -402,9 +402,26 @@
     paintAssistant();
   }
 
+  /* Chinese and Tamil headings are set in Noto Serif, the nearest match to the Latin serif,
+     and Tamil text in Noto Sans Tamil so it looks the same on every phone. Their fonts load
+     only once someone picks that language. */
+  const SCRIPT_FONTS = {
+    zh: 'family=Noto+Serif+SC:wght@600',
+    ta: 'family=Noto+Sans+Tamil:wght@400;600&family=Noto+Serif+Tamil:wght@600'
+  };
+  function loadScriptFont(lang) {
+    if (!SCRIPT_FONTS[lang] || document.getElementById('font-' + lang)) return;
+    const link = document.createElement('link');
+    link.id = 'font-' + lang;
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?${SCRIPT_FONTS[lang]}&display=swap`;
+    document.head.appendChild(link);
+  }
+
   /* Fixed text in index.html (footer, skip link…): data-t holds the English. */
   function paintStatic() {
     document.documentElement.lang = prefs.lang;
+    loadScriptFont(prefs.lang);
     $$('[data-t]').forEach(el => { el.textContent = t(el.dataset.t); });
     $('.site-bar').setAttribute('aria-label', t('Main'));
     $('#footerHelplines').innerHTML = KW.HELPLINES.map(h =>
@@ -1021,7 +1038,7 @@
   /* [label, Broadsheet tag variant] */
   const VERDICTS = {
     scam: ['Scam', 'tag-accent-2'],
-    suspicious: ['Suspicious', 'tag-accent-2'],
+    suspicious: ['Suspicious', 'tag-caution'],
     safe: ['Likely safe', 'tag-accent']
   };
 
@@ -1047,7 +1064,7 @@
     }
 
     list.innerHTML = cache.cases.map(c => {
-      const status = { waiting: [t('Waiting for volunteer'), 'tag-outline'], replied: [t('Volunteer replied'), 'tag-accent'], resolved: [t('Resolved'), 'tag-neutral'] }[c.status];
+      const status = { waiting: [t('Waiting for volunteer'), 'tag-pending'], replied: [t('Volunteer replied'), 'tag-accent'], resolved: [t('Resolved'), 'tag-neutral'] }[c.status];
       return `
         <article class="case" id="case-${esc(c.id)}">
           <header class="case-head">
@@ -1878,7 +1895,7 @@
       <ul class="drill-history" role="list">${drills.map(d => `
         <li>
           <span>${tx(d.name)}</span>
-          ${d.result ? `<span class="tag ${DRILL_RESULTS[d.result][1]}">${tx(DRILL_RESULTS[d.result][0])}</span>` : `<span class="tag tag-outline">${tx('Not answered yet')}</span>`}
+          ${d.result ? `<span class="tag ${DRILL_RESULTS[d.result][1]}">${tx(DRILL_RESULTS[d.result][0])}</span>` : `<span class="tag tag-pending">${tx('Not answered yet')}</span>`}
           <span class="muted">${timeAgo(d.created)}${d.sender ? ` · ${tx('from {name}', { name: d.sender.name })}` : ''}${d.reportId ? ` · ${tx('from a Scam Radar wave')}` : ''}</span>
         </li>`).join('')}
       </ul>`;
@@ -2486,11 +2503,15 @@
       stat(reports.filter(r => r.status === 'verified').length, 'verified by CC and RC volunteers') +
       stat(reports.filter(r => r.status === 'pending').length, 'awaiting a volunteer’s check') +
       stat(top ? esc(placeName(top)) : tx('None'), 'hardest-hit town');
+    // The verified and awaiting counts take the same inks as the circles on the map below.
+    const [, verified, pending] = $$('#radarStats .stat-n');
+    verified.classList.add('ink-verified');
+    pending.classList.add('ink-pending');
   }
 
   const STATUS_TAG = {
     verified: r => `<span class="tag tag-accent-2">${tx('Verified')}</span>${r.verifiedBy ? `<span class="r-by">${esc(placeName(r.verifiedBy))}</span>` : ''}`,
-    pending: () => `<span class="tag tag-outline">${tx('Awaiting check')}</span>`,
+    pending: () => `<span class="tag tag-pending">${tx('Awaiting check')}</span>`,
     rumour: r => `<span class="tag tag-neutral">${tx('Not a scam wave')}</span>${r.verifiedBy ? `<span class="r-by">${esc(placeName(r.verifiedBy))}</span>` : ''}`
   };
 
@@ -2620,7 +2641,7 @@
     if (!map || !markerLayer) return;
     markerLayer.clearLayers();
     const verifiedInk = cssVar('--color-accent-2-700');
-    const pendingInk = cssVar('--color-accent-600');
+    const pendingInk = cssVar('--color-kaya-600');
     const groups = {};
     reports.filter(r => r.status !== 'rumour').forEach(r => {
       const g = groups[r.town] || (groups[r.town] = { residents: 0, reports: [], verified: false, fresh: false });
@@ -2636,6 +2657,7 @@
       L.circleMarker(coords, {
         radius: 9 + Math.sqrt(g.residents) * 2.4,
         color, weight: 2, fillColor: color, fillOpacity: 0.3,
+        dashArray: g.verified ? null : '5 4', // unchecked waves get a dashed ring, not only a different colour
         className: g.fresh ? 'pulse' : ''
       }).bindPopup(`
         <div class="map-pop">
@@ -2721,8 +2743,8 @@
   const communityView = { flair: 'all', sort: 'hot', q: '' };
   const flairLabel = id => (KW.FLAIRS.find(f => f.id === id) || {}).label || id;
 
-  /* Tag colour for each topic: warnings in chili, tips in pandan, the rest quieter. */
-  const FLAIR_TAG = { ask: 'tag-accent-2', alert: 'tag-accent-2', tips: 'tag-accent', debate: 'tag-neutral', story: 'tag-outline' };
+  /* Tag colour for each topic: warnings in chili, questions in kaya, tips in pandan, the rest quieter. */
+  const FLAIR_TAG = { ask: 'tag-caution', alert: 'tag-accent-2', tips: 'tag-accent', debate: 'tag-neutral', story: 'tag-outline' };
   // Posts, poll answers and topics are shown without emoji.
   const noEmoji = s => String(s).replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '').replace(/\s{2,}/g, ' ').trim();
 
