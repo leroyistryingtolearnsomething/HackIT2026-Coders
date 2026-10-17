@@ -172,7 +172,9 @@
     } catch (e) {
       throw new ApiError('offline');
     }
-    const data = res.status === 204 ? null : await res.json().catch(() => null);
+    let data = res.status === 204 ? null : await res.json().catch(() => null);
+    // Dev-only worst-case data (js/dev-data.js); absent on public addresses.
+    if (res.ok && window.KW_DEV) data = window.KW_DEV.shape(method, path, data);
     if (!res.ok) {
       if (res.status === 401 && prefs.volunteer && path !== '/volunteer/login') endVolunteerSession('Your volunteer session has expired. Please sign in again.');
       throw new ApiError((data && data.error) || `Request failed (${res.status})`);
@@ -3463,8 +3465,9 @@
     // From the home screen: the Pause button, ready to tap (or the countdown, in emergency-button mode).
     const hash = fromHome ? (launchParam === 'pause' || homePauseOn() ? '#/pause/now' : '#/pause')
       : location.hash || '#/home';
-    // Drop ?launch=... so a reload doesn't count as another launch.
-    history.replaceState(null, '', location.pathname + hash);
+    // Drop ?launch=... so a reload doesn't count as another launch (a dev-only ?data=... stays).
+    const data = new URLSearchParams(location.search).get('data');
+    history.replaceState(null, '', location.pathname + (data ? '?data=' + encodeURIComponent(data) : '') + hash);
   }
 
   boot();
