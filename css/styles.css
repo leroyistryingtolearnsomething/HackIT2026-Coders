@@ -91,6 +91,7 @@ button, input, select, textarea { font-family: inherit; }
 }
 .skip-link { position: absolute; left: -999px; top: var(--space-2); z-index: 100; background: var(--color-text); color: var(--color-bg); padding: var(--space-2) var(--space-3); }
 .skip-link:focus { left: var(--space-2); }
+@media (hover: hover) and (pointer: fine) { .skip-link:hover { color: var(--color-bg); } }
 
 body:not(.volunteer-on) .vol-only { display: none !important; }
 
@@ -121,7 +122,9 @@ body:not(.volunteer-on) .vol-only { display: none !important; }
   display: block; font-size: 1.0625rem; line-height: 1.75rem; margin-bottom: var(--space-1);
   color: var(--ink-70);
 }
-.input { font-size: 1.0625rem; min-height: 44px; padding: var(--space-2); }
+/* A field's edge needs 3:1 against the page (WCAG 1.4.11); Broadsheet's 16% divider is about 1.1:1. */
+.input { font-size: 1.0625rem; min-height: 44px; padding: var(--space-2); border-color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+@media (hover: hover) and (pointer: fine) { .input:hover { border-color: color-mix(in srgb, var(--color-text) 75%, transparent); } }
 textarea.input { line-height: 1.75rem; }
 .input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
@@ -137,7 +140,7 @@ textarea.input { line-height: 1.75rem; }
 .radio input:checked + .dot { border-color: var(--color-accent-700); background: var(--color-accent-700); }
 
 .check { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; cursor: pointer; }
-.check input { width: 22px; height: 22px; margin: 0; accent-color: var(--color-accent-700); }
+.check input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--color-accent-700); }
 
 .progress { height: 4px; background: var(--color-neutral-300); border-radius: var(--radius-sm); overflow: hidden; margin: var(--space-2) 0; }
 .progress span { display: block; height: 100%; background: var(--color-accent-700); }
@@ -705,12 +708,16 @@ body.route-ask .fab { display: none; }
 /* Pause is a one-button page, so its top is centred: heading, explanation, the button,
    then who gets the alert. Sections further down stay left-aligned. */
 .pause-page { padding-top: var(--space-8); }
-.pause-page .page-head { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; gap: var(--space-3); margin-bottom: var(--gap-lg); }
-.pause-page .page-head .display { max-width: 22ch; margin-inline: auto; }
-.pause-page .page-head .lede { max-width: 62ch; margin-inline: auto; }
+.pause-page .page-head { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; gap: var(--space-4); margin-bottom: var(--gap-lg); }
+.pause-page .page-head > * { min-width: 0; max-width: 100%; } /* long Tamil words wrap instead of widening the page */
+.pause-page .page-head .display { max-width: 22ch; margin-inline: auto; text-wrap: balance; }
+.pause-page .page-head .lede { max-width: 58ch; margin-inline: auto; }
 .pause-page .pause-start { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; gap: var(--space-6); }
 .pause-page .pause-who { align-items: center; }
+.pause-page .pause-start .pause-team { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: var(--space-3) var(--space-6); }
 .pause-page .pause-history { text-align: center; }
+.pause-page.is-live .page-head, .pause-page.is-ended .page-head,
+.pause-page.is-live #circleZone, .pause-page.is-live #installZone, .pause-page.is-live #impactZone { display: none; } /* once it's on, the live Pause is the whole page */
 .pause-page .pause-history .plain-list li { justify-content: center; }
 
 .pause-start { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--gap-xl); align-items: center; }
@@ -727,19 +734,73 @@ body.route-ask .fab { display: none; }
 .pause-btn:focus-visible { outline: 3px solid var(--color-text); outline-offset: 1rem; }
 .pause-btn:disabled { cursor: progress; opacity: .75; }
 .pause-btn-word { font-size: 3.75rem; line-height: 1; font-weight: var(--font-heading-weight); letter-spacing: -.02em; }
-.pause-btn-sub { font-family: var(--font-body); font-size: 1.125rem; line-height: 1.5rem; }
-.pause-who { display: flex; flex-direction: column; gap: var(--space-3); max-width: 46ch; }
+.pause-btn-sub { font-family: var(--font-body); font-size: 1.125rem; line-height: 1.5rem; max-width: 100%; padding-inline: var(--space-4); overflow-wrap: anywhere; }
+.pause-who { display: flex; flex-direction: column; gap: var(--space-4); max-width: 46ch; }
 .pause-who p { margin: 0; }
-.pause-people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); font-size: 1.25rem; line-height: 1.875rem; }
-.pause-people .muted { display: block; font-size: 1rem; line-height: 1.5rem; }
+/* Small headings inside the Pause page: sentence case, so they read as words, not labels. */
+.pause-who-title, .pause-side-title { font-family: var(--font-body); font-size: 1.125rem; line-height: 1.625rem; font-weight: 600; margin: 0; }
+.pause-truth { font-weight: 600; }
+
+/* People: your Circle, volunteers on duty, who's on the way */
+.pause-team { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.person { display: flex; align-items: center; gap: var(--space-3); text-align: left; min-width: 0; }
+.person-who { display: flex; flex-direction: column; min-width: 0; font-size: 1.125rem; line-height: 1.5rem; overflow-wrap: anywhere; }
+.person-note { font-size: 1rem; line-height: 1.375rem; color: var(--ink-78); }
+.person.is-live .duty-avatar { background: var(--color-accent-700); color: var(--color-bg); box-shadow: 0 0 0 3px var(--color-bg), 0 0 0 5px var(--color-accent-700); }
+.person.is-live .person-note { color: var(--color-accent-700); font-weight: 600; }
+.duty-avatar-group { background: var(--color-surface); color: var(--color-text); }
 .pause-history { margin-top: var(--gap-lg); }
 .plain-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .plain-list li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); }
 
-.pause-live { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); gap: var(--gap-xl); align-items: start; }
+/* Live Pause: what's happening and who's coming, then the signs for the Circle,
+   then messages and closing it, last and quiet. */
+.pause-live { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); gap: var(--gap-lg) var(--gap-xl); align-items: start; }
 .pause-live-main { display: flex; flex-direction: column; gap: var(--space-4); }
-.pause-live-main p, .pause-live-side p { margin: 0; }
-.pause-live-main .thread { margin-bottom: 0; }
+.pause-live-main p, .pause-live-side p, .pause-live-more p { margin: 0; }
+.pause-live-more { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--space-6); max-width: 46rem; }
+.pause-live-more .thread { margin-bottom: 0; }
+.pause-on { font-size: 1rem; line-height: 1.5rem; font-weight: 600; color: var(--color-accent-2-700); }
+.pause-live .pause-team { padding-block: var(--space-2); }
+.pause-msgs summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; font-size: 1.125rem; font-weight: 600; color: var(--color-accent-700); }
+.pause-msgs[open] summary { margin-bottom: var(--space-3); }
+.pause-msgs .reply-form { margin-top: var(--space-3); }
+
+/* Closing: a quiet link, then the three endings, then 10 seconds to undo. */
+.pause-close { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6); background: var(--color-surface); border-radius: var(--radius-lg); max-width: 34rem; }
+.pause-close-title { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 1.5rem; line-height: 2rem; margin: 0; }
+.pause-close-title:focus { outline: none; }
+.pause-close .pause-outcomes { display: flex; flex-direction: column; gap: var(--space-2); }
+.pause-close .pause-outcomes .btn { width: 100%; justify-content: flex-start; background: var(--color-bg); }
+.pause-close.is-pending { background: var(--color-accent-100); }
+.close-count { font-variant-numeric: tabular-nums; }
+.pause-close-open .btn { padding-inline: 0; }
+
+/* "Your alert didn't go out" and the worst ending: the call buttons are the next step. */
+.pause-alertbox, .pause-end-lost { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6); background: var(--color-accent-2-100); border-radius: var(--radius-lg); max-width: 46rem; margin-inline: auto; text-align: left; }
+.pause-alertbox { margin-bottom: var(--gap-lg); }
+.pause-alertbox p, .pause-end p { margin: 0; }
+.pause-alertbox:focus, .pause-headline:focus { outline: none; }
+.pause-alertbox-title { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 1.75rem; line-height: 2.25rem; margin: 0; color: var(--color-accent-2-800); }
+.call-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.btn-call { gap: var(--space-2); background: var(--color-accent-2-700); color: var(--color-bg); border-color: var(--color-accent-2-700); text-decoration: none; white-space: normal; }
+.btn-call svg { flex: none; }
+.btn-call-quiet { background: var(--color-bg); color: var(--color-text); border-color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+@media (hover: hover) and (pointer: fine) {
+  .btn-call:hover { background: var(--color-accent-2-800); color: var(--color-bg); }
+  .btn-call-quiet:hover { background: var(--color-surface); color: var(--color-text); }
+}
+.pause-end { display: flex; flex-direction: column; gap: var(--space-4); max-width: 46rem; margin-inline: auto; }
+.pause-end:not(.pause-end-lost) { text-align: center; align-items: center; }
+.pause-end .pause-headline-calm { color: var(--color-accent-700); }
+.pause-end-mark { fill: var(--color-accent-100); stroke: var(--color-accent-700); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.pause-end-mark path { stroke-dasharray: 40; stroke-dashoffset: 0; animation: mark-draw 480ms var(--ease-out) 120ms backwards; }
+@keyframes mark-draw { from { stroke-dashoffset: 40; } }
+
+/* The countdown's "Send now" stays in Pause's own red, not the site's green. */
+.btn-pause { background: var(--color-accent-2-700); color: var(--color-bg); border-color: var(--color-accent-2-700); }
+@media (hover: hover) and (pointer: fine) { .btn-pause:hover { background: var(--color-accent-2-800); color: var(--color-bg); } }
+.btn-pause:active { background: var(--color-accent-2-900); }
 .pause-headline {
   font-family: var(--font-heading); font-weight: var(--font-heading-weight);
   font-size: 2.5rem; line-height: 2.875rem; margin: 0; color: var(--color-accent-2-700);
@@ -821,7 +882,7 @@ body.route-ask .fab { display: none; }
 }
 .launch-box p { margin: 0; }
 .launch-title { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 2rem; line-height: 2.5rem; margin: 0; color: var(--color-accent-2-700); }
-.launch-count { display: inline-block; min-width: 1ch; font-size: 3rem; font-variant-numeric: tabular-nums; }
+.launch-count { display: inline-block; min-width: 1ch; font-size: 3rem; line-height: 1; vertical-align: -.125em; font-variant-numeric: tabular-nums; }
 .launch-who { font-size: 1.125rem; line-height: 1.75rem; }
 /* Drains over the 5 seconds at a constant rate (linear: it's a clock, not a movement). */
 .launch-bar { display: block; height: 6px; border-radius: 999px; overflow: hidden; background: var(--color-accent-2-100); }
@@ -861,9 +922,12 @@ body.route-ask .fab { display: none; }
   /* The app opens here: the Pause button must be on screen without scrolling. */
   .pause-page { padding-top: var(--space-6); }
   .pause-page .page-head { margin-bottom: var(--space-6); }
-  .pause-page .page-head .kicker { margin-bottom: var(--space-2); }
+  .pause-page .page-head { gap: var(--space-2); }
   .pause-page .page-head .display { font-size: 2rem; line-height: 2.375rem; }
-  .pause-page .page-head .head-side { display: none; }
+  .pause-page .page-head .lede { font-size: 1.0625rem; line-height: 1.625rem; }
+  .pause-page .lede-why { display: none; } /* keeps the Pause button on the first screen */
+  .pause-close, .pause-alertbox, .pause-end-lost { padding: var(--space-4); }
+  .call-row .btn { flex: 1 1 100%; justify-content: flex-start; }
   .pause-btn { width: 12rem; height: 12rem; }
   .pause-btn-word { font-size: 3rem; }
   .pause-headline { font-size: 2rem; line-height: 2.5rem; }
@@ -934,13 +998,58 @@ body.route-ask .fab { display: none; }
 
 /* Tamil words run much longer than English, so big headings get a smaller size there,
    and any language can break a word that still won't fit rather than spill off screen. */
-.display, .display-sm, .cf-headline, .pause-headline { overflow-wrap: break-word; }
+/* "anywhere", not "break-word": only it lets a centred heading shrink below its longest word. */
+.display, .display-sm, .cf-headline, .pause-headline, .launch-title, .pause-alertbox-title { overflow-wrap: anywhere; }
 :lang(ta) .display { font-size: 2.75rem; line-height: 3.5rem; letter-spacing: 0; }
 :lang(ta) .display, :lang(ta) .pause-page .page-head .display { max-width: none; }
 :lang(ta) .pause-btn-word { font-size: 2.25rem; }
+:lang(ta) .pause-btn-sub { font-size: 1rem; line-height: 1.375rem; }
+/* Tamil compounds can outrun a phone's width in any label, so on Pause every line may break. */
+:lang(ta) .pause-page { overflow-wrap: anywhere; }
+:lang(ta) .launch-title { font-size: 1.5rem; line-height: 2.25rem; }
 :lang(ta) .display-sm, :lang(ta) .cf-headline, :lang(ta) .pause-headline { font-size: 2rem; line-height: 2.75rem; letter-spacing: 0; }
 @media (max-width: 720px) {
   :lang(ta) .display, :lang(ta) .pause-page .page-head .display { font-size: 1.75rem; line-height: 2.5rem; }
   :lang(ta) .display-sm, :lang(ta) .cf-headline, :lang(ta) .pause-headline { font-size: 1.5rem; line-height: 2.25rem; }
   :lang(ta) .pause-btn-word { font-size: 1.875rem; }
+  html.large-text:lang(ta) .pause-page .page-head .display { font-size: 1.5rem; line-height: 2.25rem; }
+  html.large-text:lang(ta) .pause-headline { font-size: 1.3125rem; line-height: 2rem; }
+}
+
+/* ---------- Apple-style layer: materials, type by script, contrast and transparency settings ---------- */
+
+/* Materials: on tablets and computers the header floats as a translucent layer the page scrolls under.
+   On phones it stays in the page, so the Pause button keeps the whole first screen.
+   The single dark line under it stays: it's the house style. */
+@media (min-width: 721px) {
+  .site-header {
+    position: sticky; top: 0; z-index: 50;
+    background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    backdrop-filter: blur(20px) saturate(160%);
+  }
+  .alert-banner { top: var(--header-h, 0px); }          /* sits just under the floating header */
+  html { scroll-padding-top: calc(var(--header-h, 0px) + var(--space-4)); } /* jumps don't land under it */
+}
+
+/* Chinese and Tamil don't take the tightened tracking used for large Latin headings,
+   and Tamil's tall letters need more room between lines. */
+:lang(zh) .display, :lang(zh) .display-sm, :lang(zh) .cf-headline, :lang(zh) .pause-headline, :lang(zh) .cm-title, :lang(zh) .pause-btn-word,
+:lang(ta) .cm-title, :lang(ta) .pause-btn-word { letter-spacing: 0; }
+html:lang(ta) body { line-height: 2rem; }
+
+/* "Reduce transparency" in the phone's settings: a solid header, no blur. */
+@media (prefers-reduced-transparency: reduce) {
+  .site-header { background: var(--color-surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* "Increase contrast": darker secondary text, firmer lines and borders, solid header. */
+@media (prefers-contrast: more) {
+  :root {
+    --ink-70: color-mix(in srgb, var(--color-text) 88%, transparent);
+    --ink-78: color-mix(in srgb, var(--color-text) 92%, transparent);
+    --color-divider: rgba(42, 33, 24, .55);
+  }
+  .site-header { background: var(--color-surface); -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom-width: 2px; }
+  .btn-secondary, .input, .cm-poll-opt, .poll-opt { border-color: var(--color-text); }
 }

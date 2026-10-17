@@ -384,9 +384,14 @@
   }
 
   /* The header follows the chosen language on every page. */
+  /* The tab title says where you are: "Scam Radar · Kampung Watch". */
+  const TITLE_KEYS = { home: 'navPause', pause: 'navPause', sos: 'navPause', ask: 'navCheck', radar: 'navRadar', community: 'navCommunity', learn: 'navLearn', ai: 'assistant' };
+  const setTitle = () => { document.title = `${say(TITLE_KEYS[current.route] || 'navPause')} · Kampung Watch`; };
+
   function paintHeader() {
     const header = $('.site-header');
     header.lang = prefs.lang;
+    setTitle();
     $$('[data-i18n]', header).forEach(el => { el.textContent = say(el.dataset.i18n); });
     $$('[data-i18n-label]', header).forEach(el => { el.setAttribute('aria-label', say(el.dataset.i18nLabel)); });
     const town = userTown();
@@ -421,6 +426,10 @@
   });
 
   new MutationObserver(debounce(translateWritten, 150)).observe(main, { childList: true, subtree: true });
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(([entry]) => document.documentElement.style.setProperty('--header-h', entry.target.offsetHeight + 'px'))
+      .observe($('.site-header'));
+  }
   document.addEventListener('click', e => {
     if (!e.target.closest('[data-show-original]')) return;
     showOriginal = !showOriginal;
@@ -666,6 +675,7 @@
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
     const route = routes[parts[0]] ? parts[0] : 'home';
     current = { route, args: parts.slice(1) };
+    setTitle();
     if (map) { map.remove(); map = null; markerLayer = null; }
     clearInterval(pauseTimer);
     clearInterval(sosTimer);
@@ -702,7 +712,7 @@
         <div class="error-block">
           <p class="kicker">${offline ? tx('Offline') : tx('Error')}</p>
           <h1 class="display">${offline ? tx('Can’t reach the Kampung Watch server.') : tx('Something went wrong.')}</h1>
-          <p class="lede">${offline ? th('Check your connection. If you’re running it yourself, start the server with {cmd} in the project folder.', { cmd: '<code>npm start</code>' }) : esc(err.message)}</p>
+          <p class="lede">${offline ? tx('Check your Wi-Fi or mobile data, then try again.') : esc(err.message)}</p>
           ${offline ? `<p class="lede">${th('Being pressured to pay right now? Don’t pay. Call someone you trust, or the ScamShield Helpline {1799}. In danger, call {999}.', { 1799: telLink('1799'), 999: telLink('999') })}</p>` : ''}
           <button type="button" class="btn btn-primary btn-lg" id="retryBtn">${tx('Try again')}</button>
         </div>
@@ -1142,7 +1152,9 @@
     clicked: ['Fell for it', 'tag-accent-2']
   };
 
-  const pauseState = { circle: null, pauses: [], stats: null, drillStats: null, suggest: {} };
+  /* ended: how the resident's own Pause just ended, shown until they go back to the button.
+     sendFailed: the last alert didn't go out. msgsOpen: the messages list, opened or closed by hand. */
+  const pauseState = { circle: null, pauses: [], stats: null, drillStats: null, suggest: {}, ended: null, sendFailed: false, msgsOpen: null, closeFor: null };
   let pauseTimer = null;
 
   const fmtClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -1165,23 +1177,21 @@
   async function renderPause(seq, sub) {
     await loadPauseData();
     if (stale(seq)) return;
+    Object.assign(pauseState, { ended: null, msgsOpen: null, closeFor: null });
+    announced = '';
     main.innerHTML = `
       <div class="page pause-page">
         <header class="page-head">
-          <div>
-            <p class="kicker">${tx('Pause · before you pay')}</p>
-            <h1 class="display">${tx('Someone pushing you to pay? Press Pause.')}</h1>
-          </div>
-          <div class="head-side">
-            <p class="lede">${tx('Scammers win by keeping you alone and in a hurry. Pause brings in the people you trust. Your Circle gets an alert straight away and calls you. If no one answers within {wait}, a volunteer near you steps in.', { wait: fmtWait() })}</p>
-          </div>
+          <h1 class="display">${tx('Someone pushing you to pay? Press Pause.')}</h1>
+          <p class="lede"><span class="lede-why">${tx('Scammers win by keeping you alone and in a hurry.')} </span>${tx('Your Circle gets an alert and calls you. If no one answers within {wait}, a volunteer near you steps in.', { wait: fmtWait() })}</p>
         </header>
+        <p class="sr-only" id="pauseAnnounce" aria-live="polite"></p>
         <section id="pauseZone" class="pause-zone" aria-label="${tx('Pause')}"></section>
-        <section id="installZone" class="section install-zone" aria-labelledby="installTitle"></section>
         <section id="guardZone" class="section" aria-labelledby="guardTitle" hidden></section>
         <section id="volPauseZone" class="section vol-only" aria-labelledby="volPauseTitle"></section>
         <section id="circleZone" class="section" aria-labelledby="circleTitle"></section>
-        <section class="section" aria-labelledby="impactTitle">
+        <section id="installZone" class="section install-zone" aria-labelledby="installTitle"></section>
+        <section id="impactZone" class="section" aria-labelledby="impactTitle">
           <h2 class="section-title" id="impactTitle">${tx('Pause so far')}</h2>
           <div class="stat-row pause-stats" id="pauseStats"></div>
         </section>
@@ -1190,6 +1200,8 @@
     page.addEventListener('click', onPauseClick);
     page.addEventListener('submit', onPauseSubmit);
     page.addEventListener('change', onPauseChange);
+    // <details> toggles don't bubble, so listen while the event travels down.
+    page.addEventListener('toggle', e => { if (e.target.matches('[data-msgs]')) pauseState.msgsOpen = e.target.open; }, true);
     redrawPause();
     if (sub === 'now') {
       // Back or reload must never send a second alert.
@@ -1239,24 +1251,38 @@
     const zone = $('#pauseZone');
     const { circle, pauses } = pauseState;
     const open = pauses.find(p => p.role === 'owner' && p.status === 'open');
-    if (open) { zone.innerHTML = pauseLiveHTML(open); return; }
+    if (open) {
+      pauseState.ended = null;
+      zone.innerHTML = pauseLiveHTML(open);
+      $('.pause-page').classList.add('is-live');
+      announce(pauseHeadline(open));
+      return;
+    }
+    $('.pause-page').classList.remove('is-live');
+    $('.pause-page').classList.toggle('is-ended', Boolean(pauseState.ended));
+    if (pauseState.ended) { zone.innerHTML = pauseEndHTML(pauseState.ended); return; }
 
     const members = circle.mine ? circle.mine.members : [];
     const past = pauses.filter(p => p.role === 'owner').slice(0, 3);
+    const town = (circle.mine && circle.mine.town) || prefs.subscription.town;
+    const onDuty = KW.VOLUNTEERS.filter(v => v.area === town).slice(0, 3);
     zone.innerHTML = `
+      ${pauseState.sendFailed ? sendFailedHTML() : ''}
       <div class="pause-start">
         <button type="button" class="pause-btn" id="pauseBtn">
           <span class="pause-btn-word">${tx('Pause')}</span>
           <span class="pause-btn-sub">${members.length ? tx('Alert my Circle') : tx('Alert a volunteer')}</span>
         </button>
         <div class="pause-who">
-          <h2 class="kicker">${tx('Who gets the alert')}</h2>
+          <h2 class="pause-who-title">${tx('Who gets the alert')}</h2>
           ${members.length ? `
-            <ul class="pause-people" role="list">${members.map(m => `<li><strong>${esc(m.name)}</strong> <span class="muted">${tx(m.relation)}</span></li>`).join('')}</ul>
+            <ul class="pause-team" role="list">${members.map(m => personHTML(m.name, tx(m.relation))).join('')}</ul>
             <p class="muted">${tx('If no one answers within {wait}, volunteers near {town} are alerted too.', { wait: fmtWait(), town: circle.mine.town })}</p>`
           : `
             <p>${circle.mine ? tx('No one has joined your Circle yet, so volunteers near you will get the alert.') : tx('You haven’t set up your Circle yet, so volunteers near you will get the alert.')}</p>
+            ${onDuty.length ? `<ul class="pause-team" role="list" aria-label="${tx('Volunteers near {town}', { town })}">${onDuty.map(v => personHTML(v.name, tx(v.role))).join('')}</ul>` : ''}
             <p><button type="button" class="btn btn-secondary" data-jump="circleTitle">${circle.mine ? tx('Invite your family') : tx('Set up your Circle')}</button></p>`}
+          <p class="pause-truth">${tx('Real police, banks and government officers never ask you to pay, move money or keep a call secret.')}</p>
           <p class="cf-help">${th('Money leaving your account right now? Call {999}. For advice, call the ScamShield Helpline {1799}.', { 999: telLink('999'), 1799: telLink('1799') })}</p>
         </div>
       </div>
@@ -1271,29 +1297,114 @@
         </div>` : ''}`;
   }
 
+  /* One person in "who gets the alert" or "who's coming": initials, name, and a note. */
+  const personHTML = (name, note, live = false) => `
+    <li class="person${live ? ' is-live' : ''}">
+      <span class="duty-avatar" aria-hidden="true">${esc(initials(name))}</span>
+      <span class="person-who"><strong>${esc(name)}</strong> <span class="person-note">${note}</span></span>
+    </li>`;
+
+  const pauseHeadline = p => p.responder ? t('{name} is calling you now.', { name: p.responder.name })
+    : p.stage === 'circle' ? t('Your Circle has been alerted.') : t('Volunteers near you have been alerted.');
+
+  /* Screen readers hear the headline once each time it changes, not on every redraw. */
+  let announced = '';
+  function announce(text) {
+    const el = $('#pauseAnnounce');
+    if (!el || text === announced) return;
+    announced = text;
+    el.textContent = '';
+    setTimeout(() => { el.textContent = text; }, 100); // a fresh change, so it's read even if the words repeat
+  }
+
+  /* Who is on the way: the Circle by name, then volunteers once it has escalated. */
+  function pauseTeamHTML(p) {
+    const mine = pauseState.circle.mine;
+    const r = p.responder;
+    const rows = (mine ? mine.members : []).map(m => {
+      const calling = r && r.kind !== 'volunteer' && r.name === m.name;
+      return personHTML(m.name, `${tx(m.relation)} · ${calling ? tx('Calling you now') : tx('Alerted')}`, calling);
+    });
+    if (r && r.kind === 'volunteer') rows.push(personHTML(r.name, `${tx(r.detail)} · ${tx('volunteer')} · ${tx('Calling you now')}`, true));
+    else if (p.stage === 'volunteer' || !rows.length) {
+      const town = mine && mine.town;
+      rows.push(`
+        <li class="person">
+          <span class="duty-avatar duty-avatar-group" aria-hidden="true">${pauseIcon('people')}</span>
+          <span class="person-who"><strong>${town ? tx('Volunteers near {town}', { town }) : tx('Volunteers near you')}</strong> <span class="person-note">${tx('Alerted')}</span></span>
+        </li>`);
+    }
+    return `<ul class="pause-team" role="list" aria-label="${tx('Who’s been alerted')}">${rows.join('')}</ul>`;
+  }
+
+  const pauseIcon = name => ({
+    people: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.25"/><path d="M3 19.5c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><path d="M15.5 4.9a3.25 3.25 0 0 1 0 6.2M17.5 14.8c1.9.6 3.1 2.2 3.5 4.7"/></svg>',
+    phone: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3.5h3.2l1.6 4.2-2.1 1.4a11 11 0 0 0 5.2 5.2l1.4-2.1 4.2 1.6V17a2.5 2.5 0 0 1-2.7 2.5C9.6 19 5 14.4 4.5 6.2A2.5 2.5 0 0 1 5 3.5Z"/></svg>'
+  })[name];
+
+  /* Big tap-to-call buttons, for the moments a phone call is the next step. */
+  const callButtonsHTML = () => `
+    <div class="call-row">
+      <a class="btn btn-call btn-lg" href="tel:999">${pauseIcon('phone')}${tx('Call 999 · Police')}</a>
+      <a class="btn btn-call btn-call-quiet btn-lg" href="tel:1799">${pauseIcon('phone')}${tx('Call 1799 · ScamShield Helpline')}</a>
+    </div>`;
+
+  function sendFailedHTML() {
+    return `
+      <div class="pause-alertbox" role="alert">
+        <h2 class="pause-alertbox-title">${tx('Your alert didn’t go out.')}</h2>
+        <p>${tx('Don’t pay. Hang up, then call someone you trust yourself, or call for help:')}</p>
+        ${callButtonsHTML()}
+        <p><button type="button" class="btn btn-secondary" data-retry-pause>${tx('Try Pause again')}</button></p>
+      </div>`;
+  }
+
+  /* What the resident sees once their own Pause is closed. The worst ending gets the most help. */
+  function pauseEndHTML(outcome) {
+    const back = `<p><button type="button" class="btn btn-ghost" data-end-done>${tx('Back to Pause')}</button></p>`;
+    if (outcome === 'lost') {
+      return `
+        <div class="pause-end pause-end-lost">
+          <h2 class="pause-headline" id="pauseEndTitle" tabindex="-1">${tx('Act now to stop more money going.')}</h2>
+          <ol class="pause-steps">
+            <li>${th('{b}Call your bank’s 24-hour hotline now.{/b} Use the number on the back of your card or in the bank’s own app, never one the caller gave you. Ask them to stop the payment and freeze your account.', { b: '<strong>', '/b': '</strong>' })}</li>
+            <li>${th('{b}Change any password or PIN you shared,{/b} and don’t share any more codes.', { b: '<strong>', '/b': '</strong>' })}</li>
+            <li>${th('{b}Make a police report.{/b} If money is still leaving your account, call {999}. For advice, call the ScamShield Helpline {1799}.', { b: '<strong>', '/b': '</strong>', 999: telLink('999'), 1799: telLink('1799') })}</li>
+          </ol>
+          ${callButtonsHTML()}
+          <p class="muted">${tx('Your Circle can see how this Pause ended, so they can help with the calls. This is not your fault: scammers do this for a living.')}</p>
+          ${back}
+        </div>`;
+    }
+    const stopped = outcome === 'stopped';
+    return `
+      <div class="pause-end">
+        ${stopped ? `<svg class="pause-end-mark" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><circle cx="32" cy="32" r="30"/><path d="m19 33 9 9 17-19"/></svg>` : ''}
+        <h2 class="pause-headline pause-headline-calm" id="pauseEndTitle" tabindex="-1">${stopped ? tx('You stopped it. Well done.') : tx('Glad it was genuine.')}</h2>
+        <p class="lede">${stopped ? tx('You didn’t pay, and your Circle can see you’re safe. If they call again, hang up again.') : tx('Your Pause is closed. Pressing it was the right call: no one minds a false alarm.')}</p>
+        ${stopped ? `<p>${th('Help your neighbours spot it too: {a}report it on Scam Radar{/a}.', { a: '<a href="#/radar">', '/a': '</a>' })}</p>` : ''}
+        ${back}
+      </div>`;
+  }
+
   function pauseLiveHTML(p) {
     const waiting = !p.responder && p.stage === 'circle';
-    const headline = p.responder ? t('{name} is calling you now.', { name: p.responder.name })
-      : p.stage === 'circle' ? t('Your Circle has been alerted.') : t('Volunteers near you have been alerted.');
     const deadline = new Date(p.created).getTime() + escalateSeconds() * 1000;
+    const others = p.messages.filter(m => m.from !== 'system').length;
+    const msgsOpen = pauseState.msgsOpen ?? p.messages.some(m => m.from !== 'system' && m.from !== 'resident');
     return `
       <div class="pause-live">
         <div class="pause-live-main">
-          <p class="kicker">${tx('Pause is on · started {when}', { when: timeAgo(p.created) })}</p>
-          <h2 class="pause-headline" role="status">${esc(headline)}</h2>
-          ${p.responder ? `<p class="lede">${tx(p.responder.detail)}${p.responder.kind === 'volunteer' ? ` · ${tx('volunteer')}` : ''}</p>` : ''}
+          <p class="pause-on">${tx('Pause is on · started {when}', { when: timeAgo(p.created) })}</p>
+          <h2 class="pause-headline" id="pauseHeadline" tabindex="-1">${esc(pauseHeadline(p))}</h2>
+          ${pauseTeamHTML(p)}
           ${waiting ? `
             <p class="pause-clock">${th('If no one answers in {time}, volunteers are alerted too.', { time: `<strong id="pauseCountdown" data-deadline="${deadline}">${fmtClock(escalateSeconds())}</strong>` })}</p>
             <div class="btn-row"><button type="button" class="btn btn-secondary" data-escalate="${esc(p.id)}">${tx('Get a volunteer now')}</button></div>` : ''}
           ${pauseStepsHTML()}
-          <h3 class="kicker">${tx('Messages')}</h3>
-          ${pauseThread(p)}
-          ${pauseReplyForm(p, t('Tell them what’s happening…'))}
-          <h3 class="kicker">${tx('How did it end?')}</h3>
-          ${outcomeButtons(p, true)}
         </div>
         <aside class="pause-live-side" aria-labelledby="signsTitle">
-          <h3 class="kicker" id="signsTitle">${tx('What’s happening? Tap any that apply')}</h3>
+          <h3 class="pause-side-title" id="signsTitle">${tx('What’s happening? Tap any that apply')}</h3>
           <div class="sign-list" role="group" aria-labelledby="signsTitle">
             ${KW.PAUSE_SIGNS.map(s => `<button type="button" class="sign-btn" id="sign-${s.id}" data-sign="${s.id}" data-id="${esc(p.id)}" aria-pressed="${p.signs.includes(s.id)}">${tx(s.label)}</button>`).join('')}
           </div>
@@ -1306,6 +1417,14 @@
           </div>
           <p class="muted">${tx('Your Circle sees this straight away, so they know what to say when they call.')}</p>
         </aside>
+        <div class="pause-live-more">
+          <details class="pause-msgs" data-msgs ${msgsOpen ? 'open' : ''}>
+            <summary>${others ? tx('Messages ({n})', { n: others }) : tx('Messages')}</summary>
+            ${pauseThread(p)}
+            ${pauseReplyForm(p, t('Tell them what’s happening…'))}
+          </details>
+          ${closeHTML(p, true)}
+        </div>
       </div>`;
   }
 
@@ -1343,17 +1462,82 @@
       </form>`;
   }
 
-  function outcomeButtons(p, own) {
+  /* Closing a Pause takes two taps and can be undone for 10 seconds. The scammer may still be
+     on the line telling the resident which button to press, and a stressed thumb can slip. */
+  const CLOSE_SECONDS = 10;
+  let closing = null; // { id, outcome, own, left, timer }
+
+  function closeHTML(p, own) {
     if (p.status !== 'open') {
       return p.outcome ? `<p><span class="tag ${OUTCOMES[p.outcome][1]}">${tx(OUTCOMES[p.outcome][0])}</span></p>` : '';
     }
     const id = esc(p.id);
-    return `
-      <div class="btn-row pause-outcomes" role="group" aria-label="${tx('How did it end?')}">
-        <button type="button" class="btn btn-primary" data-outcome="stopped" data-id="${id}">${own ? tx('I’m safe. I didn’t pay') : tx('{name} is safe and didn’t pay', { name: p.name })}</button>
-        <button type="button" class="btn btn-secondary" data-outcome="safe" data-id="${id}">${tx('It was genuine')}</button>
-        <button type="button" class="btn btn-ghost" data-outcome="lost" data-id="${id}">${own ? tx('I already paid or shared details') : tx('Money or details were lost')}</button>
-      </div>`;
+    if (closing && closing.id === p.id) {
+      return `
+        <div class="pause-close is-pending">
+          <p class="pause-close-title">${tx(OUTCOMES[closing.outcome][0])}</p>
+          <p>${th('Closing this Pause in {n}. Changed your mind?', { n: `<strong class="close-count" data-close-count>${closing.left}</strong>` })}</p>
+          <button type="button" class="btn btn-secondary btn-lg" data-undo-close="${id}">${tx('Undo, keep this Pause open')}</button>
+        </div>`;
+    }
+    if (pauseState.closeFor === p.id) {
+      return `
+        <div class="pause-close" role="group" aria-labelledby="closeTitle-${id}">
+          <h3 class="pause-close-title" id="closeTitle-${id}" tabindex="-1">${tx('How did it end?')}</h3>
+          <div class="pause-outcomes">
+            <button type="button" class="btn btn-secondary btn-lg" data-outcome="stopped" data-id="${id}">${own ? tx('I’m safe. I didn’t pay') : tx('{name} is safe and didn’t pay', { name: p.name })}</button>
+            <button type="button" class="btn btn-secondary btn-lg" data-outcome="lost" data-id="${id}">${own ? tx('I already paid or shared details') : tx('Money or details were lost')}</button>
+            <button type="button" class="btn btn-secondary btn-lg" data-outcome="safe" data-id="${id}">${tx('It was genuine')}</button>
+          </div>
+          <p class="muted">${tx('Choose “It was genuine” only if it was checked on an official number: one from the bank’s or agency’s own website or the back of a card, never one the caller gave.')}</p>
+          <p><button type="button" class="btn btn-ghost" data-close-cancel="${id}">${tx('Not yet, keep it open')}</button></p>
+        </div>`;
+    }
+    return `<p class="pause-close-open"><button type="button" class="btn btn-ghost" data-close-open="${id}">${own ? tx('It’s over: close this Pause') : tx('It’s over: close {name}’s Pause', { name: p.name })}</button></p>`;
+  }
+
+  function startClose(id, outcome) {
+    if (closing) return;
+    const p = pauseState.pauses.find(x => x.id === id);
+    closing = { id, outcome, own: Boolean(p && p.role === 'owner'), left: CLOSE_SECONDS };
+    pauseState.closeFor = null;
+    closing.timer = setInterval(() => {
+      closing.left -= 1;
+      if (closing.left <= 0) { finishClose(); return; }
+      $$('[data-close-count]').forEach(el => { el.textContent = closing.left; });
+    }, 1000);
+    redrawPause();
+    const undo = $(`[data-undo-close="${CSS.escape(id)}"]`);
+    if (undo) undo.focus();
+    if (closing.own) announce(t('Closing this Pause in {n}. Changed your mind?', { n: CLOSE_SECONDS }));
+  }
+
+  function undoClose() {
+    if (!closing) return;
+    const { id, own } = closing;
+    clearInterval(closing.timer);
+    closing = null;
+    if (!onPausePage() || !$('.pause-page')) return;
+    redrawPause();
+    const btn = $(`[data-close-open="${CSS.escape(id)}"]`);
+    if (btn) btn.focus();
+    if (own) { announced = ''; toast(t('Your Pause is still on.')); }
+  }
+
+  async function finishClose() {
+    const c = closing;
+    clearInterval(c.timer);
+    closing = null;
+    try {
+      await api.post(pausePath(c.id, 'resolve'), { outcome: c.outcome });
+      if (c.own) pauseState.ended = c.outcome;
+      else toast(t('Pause closed. Thank you for checking first.'), 'ok');
+    } catch (err) {
+      toast(err.message === 'offline' ? t('Can’t reach the server. Check your connection and try again.') : err.message, 'warn');
+    }
+    await refreshPause();
+    const title = $('#pauseEndTitle');
+    if (c.own && title) { title.focus({ preventScroll: true }); title.scrollIntoView({ block: 'center' }); }
   }
 
   /* An open Pause, as a Circle member or volunteer sees it. */
@@ -1375,7 +1559,7 @@
         ${p.stage === 'volunteer' && escalate ? `<p class="muted">${tx('Volunteers have been alerted too.')}</p>` : ''}
         ${pauseThread(p)}
         ${pauseReplyForm(p, t('Message {name}…', { name: p.name }))}
-        ${outcomeButtons(p, false)}
+        ${closeHTML(p, false)}
       </div>`;
   }
 
@@ -1404,6 +1588,7 @@
     const zone = $('#installZone');
     if (!zone) return;
     const sosOpen = $('#sosBox') ? $('#sosBox').open : false;
+    const homeOpen = $('#homeBox') ? $('#homeBox').open : homePauseOn();
     let how;
     if (isStandalone()) {
       how = `<p>${tx('Kampung Watch is on your home screen.')}</p>`;
@@ -1420,19 +1605,25 @@
       how = `<p>${th('Open your browser’s menu and choose {b}Add to Home screen{/b} or {b}Install app{/b}.', { b: '<strong>', '/b': '</strong>' })}</p>`;
     }
     zone.innerHTML = `
-      <h2 class="kicker" id="installTitle">${tx('Pause from your home screen')}</h2>
+      <h2 class="section-title" id="installTitle">${tx('Pause from your home screen')}</h2>
       <p>${tx('When someone is pushing you to pay, you won’t have time to look for a website. Put Kampung Watch on your home screen: it opens on the Pause button, so help is two taps away.')}</p>
       ${how}
       <details class="cf-more" id="sosBox">
         <summary>${isIOS() ? tx('Even faster: double-tap the back of your iPhone, or ask Siri') : tx('Even faster: an emergency link for phone shortcuts')}</summary>
         <div class="cf-more-body" id="sosLink"></div>
       </details>
-      <label class="check">
-        <input type="checkbox" id="homePause" ${homePauseOn() ? 'checked' : ''}>
-        ${tx('Emergency button: opening Kampung Watch from my home screen starts Pause straight away')}
-      </label>
-      <p class="muted">${tx('Turn this on only if this phone uses Kampung Watch just for emergencies, for example a phone you set up for a parent.')}</p>`;
+      <details class="cf-more" id="homeBox">
+        <summary>${tx('Setting up a phone for a parent?')}</summary>
+        <div class="cf-more-body">
+          <label class="check">
+            <input type="checkbox" id="homePause" aria-describedby="homePauseHint" ${homePauseOn() ? 'checked' : ''}>
+            <span>${tx('Emergency button: opening Kampung Watch from my home screen starts Pause straight away')}</span>
+          </label>
+          <p class="muted" id="homePauseHint">${tx('Turn this on only if this phone uses Kampung Watch just for emergencies, for example a phone you set up for a parent.')}</p>
+        </div>
+      </details>`;
     $('#sosBox').open = sosOpen;
+    $('#homeBox').open = homeOpen;
     drawSosLink();
   }
 
@@ -1465,12 +1656,12 @@
     el.className = 'launch-overlay';
     el.innerHTML = `
       <div class="launch-box" role="alertdialog" aria-modal="true" aria-labelledby="launchTitle" aria-describedby="launchWho">
-        <p class="kicker">${tx('Pause')}</p>
         <h2 class="launch-title" id="launchTitle">${th(people.length ? 'Alerting your Circle in {n}' : 'Alerting volunteers in {n}', { n: '<span class="launch-count" id="launchCount">5</span>' })}</h2>
         <p class="launch-who" id="launchWho">${esc(who)}</p>
         <span class="launch-bar" aria-hidden="true"><span></span></span>
+        <p class="sr-only" id="launchLive" aria-live="assertive"></p>
         <div class="launch-actions">
-          <button type="button" class="btn btn-primary btn-lg" id="launchNow">${tx('Send now')}</button>
+          <button type="button" class="btn btn-pause btn-lg" id="launchNow">${tx('Send now')}</button>
           <button type="button" class="btn btn-secondary btn-lg" id="launchCancel">${tx('Cancel, I tapped by mistake')}</button>
         </div>
       </div>`;
@@ -1484,7 +1675,10 @@
       timer: setInterval(() => {
         left -= 1;
         if (left <= 0) go();
-        else $('#launchCount').textContent = left;
+        else {
+          $('#launchCount').textContent = left;
+          $('#launchLive').textContent = String(left); // the digits alone aren't announced
+        }
       }, 1000),
       onKey: e => { if (e.key === 'Escape') cancelLaunch(); }
     };
@@ -1506,13 +1700,21 @@
       send: async () => {
         try {
           await api.post('/pauses');
+          pauseState.sendFailed = false;
           buzz();
         } catch (err) {
-          toast(t('Couldn’t send the alert. Don’t pay. Call someone you trust, or the ScamShield Helpline 1799.'), 'warn');
+          pauseState.sendFailed = true;
+          if (!$('.pause-page')) toast(t('Couldn’t send the alert. Don’t pay. Call someone you trust, or the ScamShield Helpline 1799.'), 'warn');
         }
-        await refreshPause();
-        const status = $('.pause-headline');
-        if (status) status.scrollIntoView({ block: 'center' });
+        // Offline, a refresh would fail too, so the "didn't go out" box is drawn from what's here.
+        if (pauseState.sendFailed) { if (onPausePage() && $('.pause-page')) redrawPause(); } else await refreshPause();
+        // Focus goes where the news is: the live headline, or the "didn't go out" box.
+        const status = $('#pauseHeadline') || $('.pause-alertbox');
+        if (status) {
+          if (!status.hasAttribute('tabindex')) status.setAttribute('tabindex', '-1');
+          status.focus({ preventScroll: true });
+          status.scrollIntoView({ block: 'center' });
+        }
       },
       onCancel: () => { const btn = $('#pauseBtn'); if (btn) btn.focus(); }
     });
@@ -1585,7 +1787,14 @@
           draw(res);
           watch();
         } catch (err) {
-          toast(t('Couldn’t send the alert. Don’t pay. Call someone you trust, or the ScamShield Helpline 1799.'), 'warn');
+          const page = $('.sos-page');
+          if (!page) return;
+          $('.pause-alertbox', page)?.remove();
+          page.insertAdjacentHTML('afterbegin', sendFailedHTML());
+          const box = $('.pause-alertbox', page);
+          box.setAttribute('tabindex', '-1');
+          box.focus();
+          $('[data-retry-pause]', box).addEventListener('click', () => { box.remove(); countdown(s); });
         }
       },
       onCancel: () => { const b = $('#sosBtn'); if (b) b.focus(); }
@@ -1749,8 +1958,8 @@
       <div class="circle-layout">
         <div>
           ${mine ? `
-            <p class="kicker">${tx('Your Circle code')}</p>
-            <p class="circle-code" aria-label="${tx('Your Circle code: {code}', { code: mine.inviteCode.split('').join(' ') })}">${esc(mine.inviteCode.slice(0, 3))} ${esc(mine.inviteCode.slice(3))}</p>
+            <p class="kicker" aria-hidden="true">${tx('Your Circle code')}</p>
+            <p class="circle-code"><span class="sr-only">${tx('Your Circle code: {code}', { code: mine.inviteCode.split('').join(' ') })}</span><span aria-hidden="true">${esc(mine.inviteCode.slice(0, 3))} ${esc(mine.inviteCode.slice(3))}</span></p>
             <p>${th('Send this code to your family. They open Kampung Watch on their phone, go to Pause, and choose {b}Join their Circle{/b}.', { b: '<strong>', '/b': '</strong>' })}</p>
             <div class="btn-row">
               <button type="button" class="btn btn-secondary" id="copyCode">${tx('Copy code')}</button>
@@ -1763,23 +1972,36 @@
                 <li><span><strong>${esc(m.name)}</strong> <span class="muted">${tx(m.relation)}</span></span>
                   <button type="button" class="btn btn-ghost" data-remove="${m.id}" data-name="${esc(m.name)}">${tx('Remove')}</button></li>`).join('')}
               </ul>` : `<p class="muted">${tx('No one yet. Until someone joins, your Pause alerts go to volunteers.')}</p>`}
-            ${mine.drills.length ? `<h3 class="kicker">${tx('Your practice scams')}</h3>${drillHistory(mine.drills, mine.drillStats)}` : ''}
+            ${mine.drills.length ? `<h3 class="kicker">${tx('Your practice scams')}</h3>${drillHistory(mine.drills, mine.drillStats)}`
+              : mine.members.length ? `<p class="muted">${tx('People in your Circle can send you a safe practice scam, so the real thing is easier to spot.')}</p>` : ''}
             <details class="cf-more"><summary>${tx('Change your name or town')}</summary>${circleForm(mine)}</details>`
           : `
             <p>${tx('Your Circle is the people who get an alert when you press Pause: your children, grandchildren, a good friend or a neighbour. Set it up once, then send them your code.')}</p>
             ${circleForm(null)}`}
         </div>
-        <div>
-          <h3 class="kicker" id="joinTitle">${tx('Look after someone? Join their Circle')}</h3>
-          <p>${tx('Ask them for their 6-letter Circle code. You’ll get an alert whenever they press Pause, and you can send them practice scams.')}</p>
-          <form id="joinForm" class="form-grid" aria-labelledby="joinTitle">
-            <div class="field full"><label for="joinCode">${tx('Their Circle code')}</label><input id="joinCode" class="input circle-code-input" maxlength="9" required autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
-            <div class="field"><label for="joinName">${tx('Your name')}</label><input id="joinName" class="input" maxlength="40" required autocomplete="given-name"></div>
-            <div class="field"><label for="joinRelation">${tx('You are their')}</label><select id="joinRelation" class="input">${KW.RELATIONS.map(r => `<option value="${esc(r)}">${tx(r)}</option>`).join('')}</select></div>
-            <div class="full form-actions"><button type="submit" class="btn btn-primary">${tx('Join their Circle')}</button></div>
-          </form>
-        </div>
+        <div>${joinHTML(Boolean(mine || pauseState.circle.guarding.length))}</div>
       </div>`;
+  }
+
+  /* Someone who already has a Circle, or already looks after someone, rarely needs to join
+     another, so for them the form folds away. Everyone else sees it open: family members
+     arrive here with a code to type in. */
+  function joinHTML(folded) {
+    const wasOpen = $('#joinBox') ? $('#joinBox').open : false;
+    const intro = `<p>${tx('Ask them for their 6-letter Circle code. You’ll get an alert whenever they press Pause, and you can send them practice scams.')}</p>`;
+    const form = `
+      <form id="joinForm" class="form-grid" aria-labelledby="joinTitle">
+        <div class="field full"><label for="joinCode">${tx('Their Circle code')}</label><input id="joinCode" class="input circle-code-input" maxlength="9" required autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
+        <div class="field"><label for="joinName">${tx('Your name')}</label><input id="joinName" class="input" maxlength="40" required autocomplete="given-name"></div>
+        <div class="field"><label for="joinRelation">${tx('You are their')}</label><select id="joinRelation" class="input">${KW.RELATIONS.map(r => `<option value="${esc(r)}">${tx(r)}</option>`).join('')}</select></div>
+        <div class="full form-actions"><button type="submit" class="btn btn-primary">${tx('Join their Circle')}</button></div>
+      </form>`;
+    return folded ? `
+      <details class="cf-more" id="joinBox" ${wasOpen ? 'open' : ''}>
+        <summary id="joinTitle">${tx('Look after someone? Join their Circle')}</summary>
+        <div class="cf-more-body">${intro}${form}</div>
+      </details>`
+      : `<h3 class="pause-side-title" id="joinTitle">${tx('Look after someone? Join their Circle')}</h3>${intro}${form}`;
   }
 
   function drawPauseStats() {
@@ -1857,12 +2079,28 @@
       act(b, async () => { await api.post(pausePath(d.escalate, 'escalate')); await refreshPause(); });
     } else if (d.respond) {
       act(b, async () => { await api.post(pausePath(d.respond, 'respond')); await refreshPause(); });
+    } else if (d.closeOpen) {
+      pauseState.closeFor = d.closeOpen;
+      redrawPause();
+      const title = document.getElementById('closeTitle-' + d.closeOpen);
+      if (title) title.focus();
+    } else if (d.closeCancel) {
+      pauseState.closeFor = null;
+      redrawPause();
+      const btn = $(`[data-close-open="${CSS.escape(d.closeCancel)}"]`);
+      if (btn) btn.focus();
     } else if (d.outcome) {
-      act(b, async () => {
-        await api.post(pausePath(d.id, 'resolve'), { outcome: d.outcome });
-        toast(d.outcome === 'lost' ? t('Call your bank’s 24-hour hotline now, then make a police report.') : t('Pause closed. Thank you for checking first.'), d.outcome === 'lost' ? 'warn' : 'ok');
-        await refreshPause();
-      });
+      startClose(d.id, d.outcome); // sent after 10 seconds unless undone
+    } else if (d.undoClose) {
+      undoClose();
+    } else if ('endDone' in d) {
+      pauseState.ended = null;
+      redrawPause();
+      const btn = $('#pauseBtn');
+      if (btn) btn.focus();
+    } else if ('retryPause' in d) {
+      pauseState.sendFailed = false;
+      startLaunch();
     } else if (d.sendDrill) {
       const template = document.getElementById('dt-' + d.sendDrill).value;
       act(b, async () => {
