@@ -350,14 +350,15 @@ body.route-ask .fab { display: none; }
 }
 .cf-neighbours > section { display: flex; flex-direction: column; gap: .75rem; }
 .duty-list, .block-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .75rem; }
-.duty { display: flex; align-items: center; gap: .875rem; }
+.duty { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .875rem; }
+.duty > .btn { margin-left: auto; }
 .duty-avatar {
   width: 2.75rem; height: 2.75rem; flex: none; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   background: var(--color-accent-200); color: var(--color-accent-800);
   font-family: var(--font-heading); font-size: 1.0625rem;
 }
-.duty-who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.duty-who { flex: 1 1 10rem; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
 .duty-name { font-size: 1.125rem; line-height: 1.5rem; font-weight: 600; }
 .duty-meta { font-size: .96875rem; line-height: 1.375rem; color: color-mix(in srgb, var(--color-text) 72%, transparent); }
 .block-row { display: flex; align-items: baseline; gap: .5rem; font-size: 1.0625rem; line-height: 1.625rem; }
@@ -373,12 +374,12 @@ body.route-ask .fab { display: none; }
 /* Cases and the volunteer chat */
 .case { max-width: 72ch; margin: 0 0 var(--gap-lg); }
 .case-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
-.case-quote { margin: 0 0 var(--space-4); font-family: var(--font-heading); font-size: 1.25rem; line-height: 1.875rem; font-style: italic; }
+.case-quote { margin: 0 0 var(--space-4); font-family: var(--font-heading); font-size: 1.25rem; line-height: 1.875rem; font-style: italic; overflow-wrap: anywhere; }
 .case-img { max-height: 15rem; width: auto; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); margin-bottom: var(--space-4); }
 .callback-note { margin-bottom: var(--space-3); }
 .thread { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-4); }
 .msg { max-width: 60ch; padding: var(--space-2) var(--space-3); border-radius: var(--radius-lg); }
-.msg p { margin: 0; }
+.msg p { margin: 0; overflow-wrap: anywhere; }
 .msg time { display: block; font-size: 1rem; color: var(--ink-70); }
 .msg-me { align-self: flex-end; background: var(--color-accent-700); color: var(--color-bg); }
 .msg-me time, .msg-me .msg-name { color: var(--color-accent-100); }
@@ -431,9 +432,9 @@ body.route-ask .fab { display: none; }
 @media (hover: hover) and (pointer: fine) { .radar-table tbody tr:hover { background: none; } }
 .radar-table .num { text-align: right; }
 .r-main { width: 42%; }
-.r-title { display: block; font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 1.1875rem; line-height: 1.75rem; }
+.r-title { display: block; font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 1.1875rem; line-height: 1.75rem; overflow-wrap: anywhere; }
 .r-detail { display: block; color: var(--ink-70); font-size: 1rem; }
-.r-desc { display: block; margin-top: var(--space-2); color: var(--ink-78); max-width: 60ch; }
+.r-desc { display: block; margin-top: var(--space-2); color: var(--ink-78); max-width: 60ch; overflow-wrap: anywhere; }
 .r-img { max-height: 10rem; width: auto; margin-top: var(--space-3); border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
 .r-status { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
 .r-by { font-size: 1rem; color: var(--ink-70); }
@@ -542,9 +543,8 @@ body.route-ask .fab { display: none; }
 .post-thumb { max-height: 12.5rem; width: auto; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); margin-bottom: var(--space-3); }
 .post-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-4); }
 .post-actions > .btn-ghost { padding-inline: var(--space-1); }
-.vote { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
-.vote .btn-ghost { padding-inline: var(--space-2); }
-.vote-score { font-family: var(--font-heading); font-weight: var(--font-heading-weight); padding-inline: var(--space-1); }
+.vote { display: inline-flex; align-items: center; gap: 0; flex: none; }
+.vote-score { font-family: var(--font-heading); font-weight: var(--font-heading-weight); min-width: 2ch; text-align: center; font-variant-numeric: tabular-nums; }
 
 .post-page .post-full, .post-page .comments { max-width: 860px; }
 .post-full { display: flex; flex-direction: column; gap: var(--space-4); }
@@ -581,6 +581,7 @@ body.route-ask .fab { display: none; }
 .reply-inline[hidden] { display: none; }
 .reply-inline textarea { flex: 1; }
 .replies { margin-left: var(--space-6); }
+.replies .replies .replies .replies { margin-left: 0; }
 
 /* ==========================================================
    Learn
@@ -719,7 +720,8 @@ body.route-ask .fab { display: none; }
 .pause-btn-sub { font-family: var(--font-body); font-size: 1.125rem; line-height: 1.5rem; }
 .pause-who { display: flex; flex-direction: column; gap: var(--space-3); max-width: 46ch; }
 .pause-who p { margin: 0; }
-.pause-people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); font-size: 1.25rem; line-height: 1.875rem; }
+.pause-people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); font-size: 1.25rem; line-height: 1.875rem; }
+.pause-people .muted { display: block; font-size: 1rem; line-height: 1.5rem; }
 .pause-history { margin-top: var(--gap-lg); }
 .plain-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .plain-list li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); }
@@ -892,7 +894,7 @@ body.route-ask .fab { display: none; }
   #map { height: 320px; }
 
   /* the report table becomes a stack of entries */
-  .radar-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .radar-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
   .radar-table, .radar-table tbody, .radar-table tr, .radar-table td { display: block; width: auto; }
   .radar-table tr { padding: var(--space-4) 0; }
   .radar-table td { padding: var(--space-1) 0; border: 0; }

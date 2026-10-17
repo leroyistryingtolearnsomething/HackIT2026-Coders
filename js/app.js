@@ -30,9 +30,12 @@
   function t(en, vars) {
     const dict = (KW.I18N && KW.I18N[prefs.lang]) || {};
     const s = Object.prototype.hasOwnProperty.call(dict, en) ? dict[en] : en;
-    // {town} is always a town name, so it's shown in the chosen language too.
-    return vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? (k === 'town' ? placeName(vars[k]) : vars[k]) : m)) : s;
+    // {town} is always a town name, so it's shown in the chosen language too; numbers get separators (1,284).
+    return vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? (k === 'town' ? placeName(vars[k]) : num(vars[k])) : m)) : s;
   }
+  const LOCALES = { en: 'en-SG', zh: 'zh-SG', ms: 'ms-SG', ta: 'ta-SG' };
+  const locale = () => LOCALES[prefs.lang] || 'en-SG';
+  const num = v => (typeof v === 'number' && Number.isFinite(v) ? new Intl.NumberFormat(locale()).format(v) : v);
   const inDictionary = en => Boolean(KW.I18N && KW.I18N.zh && Object.prototype.hasOwnProperty.call(KW.I18N.zh, en));
   const tx = (en, vars) => esc(t(en, vars));
   /* Like tx(), but the {placeholders} are filled with ready-made HTML (links, bold numbers). */
@@ -111,7 +114,10 @@
     if (s < 3600) return t('{n} min ago', { n: Math.round(s / 60) });
     if (s < 86400) return t('{n}h ago', { n: Math.round(s / 3600) });
     const d = Math.round(s / 86400);
-    return d === 1 ? t('yesterday') : t('{n} days ago', { n: d });
+    if (d < 7) return d === 1 ? t('yesterday') : t('{n} days ago', { n: d });
+    const date = new Date(iso);
+    const sameYear = date.getFullYear() === new Date().getFullYear();
+    return new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) }).format(date);
   }
 
   /* Replace an item in a list by id (or add it), in place. */
@@ -714,8 +720,13 @@
     return `Selamat ${h < 12 ? 'pagi' : h < 19 ? 'petang' : 'malam'}, ${name}.`;
   }
 
-  const initials = name => name.replace(/^(Aunty|Uncle|Mr|Mrs|Mdm|Ms|Encik|Puan)\s+/i, '')
-    .split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  // First letter of the first two words, taken as whole characters (an emoji is never split in half).
+  const initials = name => {
+    const words = String(name || '').replace(/^(Aunty|Uncle|Mr|Mrs|Mdm|Ms|Encik|Puan)\s+/i, '').trim().split(/\s+/).filter(Boolean);
+    const letters = words.map(w => Array.from(w).find(ch => /\p{L}/u.test(ch))).filter(Boolean);
+    if (letters.length) return letters.slice(0, 2).join('').toUpperCase();
+    return Array.from(String(name || '').trim())[0] || ''; // e.g. a name that is only an emoji
+  };
 
   async function renderAsk(seq) {
     const vol = isVolunteer();
@@ -846,7 +857,7 @@
     function drawDuty() {
       const list = $('#dutyList');
       const onDuty = town ? KW.VOLUNTEERS.filter(v => v.area === town) : KW.VOLUNTEERS.slice(0, 3);
-      if (!onDuty.length) { list.innerHTML = `<li class="cf-note">${esc(say('dutyNone', placeName(town)))}</li>`; return; }
+      if (!onDuty.length) { list.innerHTML = `<li class="cf-note">${esc(town ? say('dutyNone', placeName(town)) : say('dutyNoneAll'))}</li>`; return; }
       list.innerHTML = onDuty.map((v, i) => `
         <li class="duty">
           <span class="duty-avatar" aria-hidden="true">${esc(initials(v.name))}</span>
@@ -876,7 +887,7 @@
           <a href="#/radar" class="block-title">${written(r.title)}</a>
           <span class="block-leader" aria-hidden="true"></span>
           <span class="block-count" aria-label="${esc(say('hit', r.count))}">${r.count}</span>
-        </li>`).join('') : `<li class="cf-note">${esc(say('blockNone', placeName(town)))}</li>`;
+        </li>`).join('') : `<li class="cf-note">${esc(town ? say('blockNone', placeName(town)) : say('blockNoneAll'))}</li>`;
     }
 
     paintCopy();
@@ -1754,13 +1765,13 @@
 
   function drawPauseStats() {
     const s = pauseState.stats;
-    const stat = (n, label) => `<div class="stat"><span class="stat-n">${esc(n)}</span><span class="stat-label">${tx(label)}</span></div>`;
+    const stat = (n, label, one) => `<div class="stat"><span class="stat-n">${esc(num(n))}</span><span class="stat-label">${tx(n === 1 && one ? one : label)}</span></div>`;
     const wait = s.medianResponseSeconds == null ? '–' : s.medianResponseSeconds < 120 ? t('{n}s', { n: s.medianResponseSeconds }) : t('{n} min', { n: Math.round(s.medianResponseSeconds / 60) });
     $('#pauseStats').innerHTML =
-      stat(s.pauses, 'Pauses pressed') +
-      stat(s.stopped, 'Scams stopped before paying') +
+      stat(s.pauses, 'Pauses pressed', 'Pause pressed') +
+      stat(s.stopped, 'Scams stopped before paying', 'Scam stopped before paying') +
       stat(wait, 'Typical time until a person steps in') +
-      stat(s.circles, 'Kampung Circles set up');
+      stat(s.circles, 'Kampung Circles set up', 'Kampung Circle set up');
   }
 
   function startPauseClock() {
@@ -2191,9 +2202,9 @@
 
   function renderRadarStats(reports) {
     const top = topBy(reports, 'town');
-    const stat = (n, label) => `<div class="stat"><span class="stat-n">${n}</span><span class="stat-label">${tx(label)}</span></div>`;
+    const stat = (n, label, one) => `<div class="stat"><span class="stat-n">${typeof n === 'number' ? num(n) : n}</span><span class="stat-label">${tx(n === 1 && one ? one : label)}</span></div>`;
     $('#radarStats').innerHTML =
-      stat(reports.length, 'reports shown') +
+      stat(reports.length, 'reports shown', 'report shown') +
       stat(reports.filter(r => r.status === 'verified').length, 'verified by CC and RC volunteers') +
       stat(reports.filter(r => r.status === 'pending').length, 'awaiting a volunteer’s check') +
       stat(top ? esc(placeName(top)) : tx('None'), 'hardest-hit town');
@@ -2421,7 +2432,7 @@
     const count = fid => postCounts ? (fid === 'all' ? postCounts.total : postCounts.byFlair[fid] || 0) : '';
     const topic = (fid, label) => `
       <li><button type="button" class="cm-topic" data-flair="${fid}" aria-pressed="${communityView.flair === fid}">
-        <span>${tx(noEmoji(label))}</span><span class="cm-topic-n" aria-label="${tx('{n} posts', { n: count(fid) })}">${count(fid)}</span>
+        <span>${tx(noEmoji(label))}</span><span class="cm-topic-n" aria-label="${tx('{n} posts', { n: count(fid) })}">${num(count(fid))}</span>
       </button></li>`;
 
     main.innerHTML = `
@@ -2546,13 +2557,13 @@
     }
   }
 
-  /* Text-only voting: "Upvote · 42 points · Downvote". */
+  /* Up and down arrows with the score between, on one row (the same arrows as the post list). */
   function voteBox(kind, id, score, mine) {
     return `
       <span class="vote" role="group" aria-label="${kind === 'post' ? tx('Vote on this post') : tx('Vote on this comment')}">
-        <button type="button" class="btn btn-ghost" data-vote="1" data-kind="${kind}" data-id="${esc(id)}" data-mine="${mine}" aria-pressed="${mine === 1}">${tx('Upvote')}</button>
-        <span class="vote-score">${tx(Math.abs(score) === 1 ? '{n} point' : '{n} points', { n: score })}</span>
-        <button type="button" class="btn btn-ghost" data-vote="-1" data-kind="${kind}" data-id="${esc(id)}" data-mine="${mine}" aria-pressed="${mine === -1}">${tx('Downvote')}</button>
+        <button type="button" class="cm-vote-btn" data-vote="1" data-kind="${kind}" data-id="${esc(id)}" data-mine="${mine}" aria-pressed="${mine === 1}" aria-label="${tx('Upvote')}">${chevron(true)}</button>
+        <span class="vote-score" aria-label="${tx(Math.abs(score) === 1 ? '{n} point' : '{n} points', { n: score })}">${num(score)}</span>
+        <button type="button" class="cm-vote-btn" data-vote="-1" data-kind="${kind}" data-id="${esc(id)}" data-mine="${mine}" aria-pressed="${mine === -1}" aria-label="${tx('Downvote')}">${chevron(false)}</button>
       </span>`;
   }
 
@@ -2613,7 +2624,7 @@
       <article class="cm-post">
         <div class="cm-vote" role="group" aria-label="${tx('Vote on this post')}">
           <button type="button" class="cm-vote-btn" data-vote="1" data-kind="post" data-id="${esc(p.id)}" data-mine="${p.myVote}" aria-pressed="${p.myVote === 1}" aria-label="${tx('Upvote')}">${chevron(true)}</button>
-          <span class="cm-score" aria-label="${tx(Math.abs(p.score) === 1 ? '{n} point' : '{n} points', { n: p.score })}">${p.score}</span>
+          <span class="cm-score" aria-label="${tx(Math.abs(p.score) === 1 ? '{n} point' : '{n} points', { n: p.score })}">${num(p.score)}</span>
           <button type="button" class="cm-vote-btn" data-vote="-1" data-kind="post" data-id="${esc(p.id)}" data-mine="${p.myVote}" aria-pressed="${p.myVote === -1}" aria-label="${tx('Downvote')}">${chevron(false)}</button>
         </div>
         <div class="cm-post-body">
