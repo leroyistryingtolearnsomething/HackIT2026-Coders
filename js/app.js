@@ -366,7 +366,7 @@
     const { flags } = analyse(text);
     const verdict = flags.length === 0 ? say('vNone') : flags.length === 1 ? say('vOne') : say('vMany', flags.length);
     return `
-      <p class="flag-verdict">${esc(verdict)}</p>
+      <p class="flag-verdict${flags.length ? '' : ' is-clear'}">${esc(verdict)}</p>
       ${flags.length ? `<ol class="flag-list" role="list">${flags.map((f, i) => `
         <li><span class="flag-n">${i + 1}</span><span class="flag-label">${tx(f.label)}</span><span class="flag-tip">${tx(f.tip)}</span></li>`).join('')}</ol>` : ''}`;
   }
@@ -402,12 +402,10 @@
     paintAssistant();
   }
 
-  /* Chinese and Tamil headings are set in Noto Serif, the nearest match to the Latin serif,
-     and Tamil text in Noto Sans Tamil so it looks the same on every phone. Their fonts load
-     only once someone picks that language. */
+  /* Tamil is set in Noto Sans Tamil so it looks the same on every phone; the font loads only
+     once someone picks Tamil. Chinese uses the phone's own sans (PingFang, YaHei, Noto). */
   const SCRIPT_FONTS = {
-    zh: 'family=Noto+Serif+SC:wght@600',
-    ta: 'family=Noto+Sans+Tamil:wght@400;600&family=Noto+Serif+Tamil:wght@600'
+    ta: 'family=Noto+Sans+Tamil:wght@400;600'
   };
   function loadScriptFont(lang) {
     if (!SCRIPT_FONTS[lang] || document.getElementById('font-' + lang)) return;
@@ -867,6 +865,8 @@
       const key = prefs.lang + '|' + (value.trim() ? flags.map(f => f.id).join(',') : '-');
       if (key === shownCheck && !force) return;
       shownCheck = key;
+      // Red only once there's something to warn about; the empty prompt and "no red flags" stay ink.
+      $('#askVerdict').dataset.level = !value.trim() ? 'empty' : flags.length ? 'flags' : 'clear';
       $('#askVerdict').textContent = !value.trim() ? say('vEmpty')
         : flags.length === 0 ? say('vNone')
         : flags.length === 1 ? say('vOne')

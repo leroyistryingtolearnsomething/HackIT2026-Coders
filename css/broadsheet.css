@@ -1,5 +1,5 @@
 /* Broadsheet — design-system tokens and component classes. This file is the source of truth for the system's look; retune it here and see readme.md. */
-/* Source Serif 4 is linked from index.html (an @import here would wait for this file first). */
+/* Fonts are linked from index.html; css/styles.css sets the stacks (San Francisco / Inter). */
 
 :root {
   --color-bg: #f3f2f2;

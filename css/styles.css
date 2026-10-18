@@ -1,17 +1,41 @@
-/* Kampung Watch — site styles, built on css/broadsheet.css.
-   Every colour, font, radius, shadow and base spacing step comes from the
-   Broadsheet tokens; nothing here hard-codes a hex value. Type is set in rem
-   so the "Text size A+" setting (html.large-text) scales the whole site.
-   Sections are separated by whitespace, not borders, boxes or cards. */
+/* Kampung Watch — site styles, built on css/broadsheet.css and restyled after the
+   Apple analysis in DESIGN.md. Every colour, font, radius and shadow comes from the
+   tokens below; type is set in rem so "Text size A+" (html.large-text) scales the site.
 
-/* Kopitiam Corner palette (design 2a): pandan green and chili red on
-   kopitiam cream. These override the Broadsheet colour tokens; every
-   other rule reads them through var(). */
+   Colour rule: one action colour, Action Blue, for everything you can tap (links,
+   buttons, focus, selection). Pandan, chili and kaya stay, but only as meaning:
+   pandan = safe, chili = scam and Pause, kaya = not known yet. */
 :root {
-  --color-bg: #f6f0e4;
-  --color-surface: #ece3d1;
-  --color-text: #2a2118;
-  --color-divider: rgba(42, 33, 24, .16);
+  --color-bg: #ffffff;
+  /* Warm neutrals: Apple's structure with a little kopitiam warmth (parchment and ink lean warm). */
+  --color-surface: #f6f4f0;   /* warm parchment: bands, panels, tiles, the footer */
+  --color-text: #1f1d1a;      /* 16.8:1 on white, 15.3:1 on parchment */
+  --color-bg-inverse: #1b1a18;          /* the header */
+  --color-bg-inverse-raised: #24221f;   /* dark tiles, controls on the header */
+  --color-text-on-inverse: #f6f4f0;     /* 15.8:1 on the header, 14.4:1 on a dark tile */
+  --color-text-on-inverse-strong: #ffffff;
+  --color-text-on-inverse-muted: #a8a399; /* 6.9:1 on the header, 6.3:1 on a dark tile */
+  --color-bg-avatar: #ebe7e0;
+  --color-text-on-action-subtle: #00366d;
+  --color-divider: rgba(0, 0, 0, .1);
+
+  --action: #0066cc;          /* 5.6:1 on white, 5.1:1 on parchment; white text on it 5.6:1 */
+  --action-hover: #0057ad;
+  --action-pressed: #004a93;
+  --action-subtle: #e8f1fb;
+  --action-on-dark: #2997ff;  /* links on the black header and dark toasts */
+  --input-edge: #857f76;      /* 4.0:1 on white, 3.6:1 on parchment and on dark: a field's edge must reach 3:1 (WCAG 1.4.11) */
+
+  --radius-sm: 5px;
+  --radius-md: 8px;           /* utility buttons, fields */
+  --radius-lg: 18px;          /* cards and panels */
+  --radius-pill: 999px;       /* actions: primary, secondary, Pause and call buttons, tags */
+  /* Shadows only where something floats over the page (dialogs, toasts, the phone's
+     floating button). Cards and buttons stay flat; the one product shadow is the Pause button's. */
+  --shadow-sm: 0 0 0 1px rgba(0, 0, 0, .08);
+  --shadow-md: 0 0 0 1px rgba(0, 0, 0, .06), 0 8px 24px rgba(0, 0, 0, .12);
+  --shadow-lg: 0 0 0 1px rgba(0, 0, 0, .06), 0 16px 40px rgba(0, 0, 0, .16);
+  --shadow-product: 3px 5px 30px rgba(0, 0, 0, .22);
 
   --color-accent: #2f7d55;
   --color-accent-100: #e6f3ea;
@@ -62,33 +86,29 @@
 }
 
 /* ---------- Typography ----------
-   One family, Source Serif 4, does every Latin job; size, weight and space tell the roles apart.
-   Roles: display (page titles), title (sections), subtitle (cards, posts), lead, body 17px,
-   meta 16px, and label: small capitals for the newspaper headers over lists and tables.
+   San Francisco on iPhones and Macs (-apple-system), Inter everywhere else (linked in
+   index.html). Inter is only downloaded where -apple-system doesn't resolve.
+   Roles: display (page titles), title (sections), subtitle, lead, body 17px, meta 16px,
+   label (a small bold line). Nothing a resident reads is under 16px.
 
-   Until the web font arrives, a local serif is resized to Source Serif's measurements
-   (taken in the browser), so text doesn't jump when it swaps in. Times New Roman matches
-   its width almost exactly; Georgia runs about 9% wider. */
-@font-face { font-family: "Source Serif Fallback"; src: local("Times New Roman"), local("TimesNewRomanPSMT"); size-adjust: 100%; ascent-override: 104%; descent-override: 34%; line-gap-override: 0%; }
-@font-face { font-family: "Source Serif Fallback Georgia"; src: local("Georgia"); size-adjust: 91%; ascent-override: 114%; descent-override: 37%; line-gap-override: 0%; }
+   While Inter loads, Arial is resized to Inter's measurements so text doesn't jump. */
+@font-face { font-family: "Inter Fallback"; src: local("Arial"), local("ArialMT"); size-adjust: 107%; ascent-override: 90.5%; descent-override: 22.5%; line-gap-override: 0%; }
 :root {
-  --font-heading: "Source Serif 4", "Source Serif Fallback", "Source Serif Fallback Georgia", serif;
+  --font-heading: -apple-system, BlinkMacSystemFont, "Inter", "Inter Fallback", "Segoe UI", Roboto, sans-serif;
   --font-body: var(--font-heading);
 }
-/* Chinese and Tamil glyphs aren't in Source Serif, so each script names its own faces
-   (Latin letters and numbers in the same line still use Source Serif). Headings take
-   Noto Serif to keep the newspaper voice; Chinese body text stays in the phone's own
-   sans, which reads better than a thin Song face at body sizes. The Noto files load
-   only when that language is chosen (loadScriptFont in app.js). */
+/* Chinese and Tamil glyphs come from each script's own sans; Latin letters and numbers in
+   the same line keep San Francisco or Inter. Noto Sans Tamil loads only when Tamil is
+   chosen (loadScriptFont in app.js); Chinese uses the phone's own font. */
 :root:lang(zh) {
-  --font-body: "Source Serif 4", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-  --font-heading: "Source Serif 4", "Noto Serif SC", "Songti SC", "Microsoft YaHei", serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-heading: var(--font-body);
 }
 :root:lang(ta) {
-  --font-body: "Source Serif 4", "Noto Sans Tamil", "Nirmala UI", "Tamil Sangam MN", "Latha", sans-serif;
-  --font-heading: "Source Serif 4", "Noto Serif Tamil", "Tamil Sangam MN", "Nirmala UI", serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Inter", "Noto Sans Tamil", "Tamil Sangam MN", "Nirmala UI", "Latha", sans-serif;
+  --font-heading: var(--font-body);
 }
-/* Only 400 and 600 are loaded, so bold means 600; a faked 700 smears the serifs. */
+/* Only 400 and 600 are loaded, so bold means 600, never a faked 700. */
 strong, b { font-weight: 600; }
 html { font-synthesis-weight: none; }
 h1, h2, h3, .display, .display-sm, .section-title, .cf-headline, .cm-title, .pause-headline { text-wrap: balance; }
@@ -108,22 +128,23 @@ button, .btn, .seg-opt, .cm-topic, summary, [role="button"] { -webkit-user-selec
 
 /* Press feedback: the button answers the moment a finger lands, not when it lifts. */
 .btn, .cm-vote-btn, .cm-poll-opt, .poll-opt, .sign-btn, .cm-topic { transition: transform 160ms var(--ease-out), background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
-.btn:active:not(:disabled), .cm-vote-btn:active, .cm-poll-opt:active, .poll-opt:active, .sign-btn:active, .cm-topic:active { transform: scale(0.97); }
+.btn:active:not(:disabled), .cm-vote-btn:active, .cm-poll-opt:active, .poll-opt:active, .sign-btn:active, .cm-topic:active { transform: scale(0.95); }
 html.large-text { font-size: 122%; }
 
 body {
   font-family: var(--font-body);
   font-size: 1.0625rem;
-  line-height: 1.75rem;
+  line-height: 1.625rem;      /* 17px at 1.47+, Apple's reading pace */
+  letter-spacing: -0.011em;   /* the slight "Apple tight" tracking, Latin only (reset below for zh/ta) */
   background: var(--color-bg);
   color: var(--color-text);
   text-wrap: pretty;
 }
 body.modal-open { overflow: hidden; }
 
-:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-a { color: var(--color-accent-700); }
-@media (hover: hover) and (pointer: fine) { a:hover { color: var(--color-accent-900); } }
+:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+a { color: var(--action); }
+@media (hover: hover) and (pointer: fine) { a:hover { color: var(--action-pressed); } }
 code { font-family: inherit; background: var(--color-surface); padding: 0 var(--space-1); border-radius: var(--radius-sm); overflow-wrap: anywhere; }
 button, input, select, textarea { font-family: inherit; }
 
@@ -140,7 +161,7 @@ body:not(.volunteer-on) .vol-only { display: none !important; }
 .muted { color: var(--ink-78); }
 .kicker, .cf-kicker, .ai-who, .cm-eyebrow, .radar-table th, .table th {
   font-family: var(--font-body); font-weight: 600; margin: 0;
-  font-size: .9375rem; line-height: 1.25rem; letter-spacing: .06em; text-transform: uppercase;
+  font-size: 1rem; line-height: 1.5rem; letter-spacing: 0; text-transform: none;
   color: var(--ink-78);
 }
 /* Capitals and tracking mean nothing in Chinese or Tamil; there the label is just a small bold line. */
@@ -154,15 +175,21 @@ body:not(.volunteer-on) .vol-only { display: none !important; }
 .btn {
   font-size: 1.0625rem; min-height: 44px;
   padding: var(--space-2) var(--space-4);
+  font-family: var(--font-body); letter-spacing: -0.011em;
 }
+/* Actions are pills (Apple's signature); utility buttons stay 8px rectangles. */
+.btn-primary, .btn-secondary, .btn-pause, .btn-call { border-radius: var(--radius-pill); padding-inline: 1.375rem; }
+.btn-secondary { background: transparent; color: var(--action); border: 1px solid var(--action); }
+@media (hover: hover) and (pointer: fine) { .btn-secondary:hover { background: var(--action-subtle); color: var(--action-hover); } }
+.btn-secondary:active { background: var(--action-subtle); }
 .btn-lg { min-height: 3.25rem; font-size: 1.125rem; padding-inline: calc(var(--space-4) * 1.2); }
 /* A step darker than --color-accent so paper-white text keeps AA contrast. */
-.btn-primary { background: var(--color-accent-700); }
-@media (hover: hover) and (pointer: fine) { .btn-primary:hover { background: var(--color-accent-800); color: var(--color-bg); } }
-.btn-primary:active { background: var(--color-accent-900); }
-.btn-ghost { color: var(--color-accent-700); padding-inline: var(--space-2); }
-@media (hover: hover) and (pointer: fine) { .btn-ghost:hover { color: var(--color-accent-800); } }
-.btn-ghost[aria-pressed='true'] { background: color-mix(in srgb, var(--color-accent) 14%, transparent); }
+.btn-primary { background: var(--action); }
+@media (hover: hover) and (pointer: fine) { .btn-primary:hover { background: var(--action-hover); color: var(--color-bg); } }
+.btn-primary:active { background: var(--action-pressed); }
+.btn-ghost { color: var(--action); padding-inline: var(--space-2); }
+@media (hover: hover) and (pointer: fine) { .btn-ghost:hover { color: var(--action-hover); } }
+.btn-ghost[aria-pressed='true'] { background: color-mix(in srgb, var(--action) 14%, transparent); }
 .btn-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
 .field > label, .field-label {
@@ -170,54 +197,65 @@ body:not(.volunteer-on) .vol-only { display: none !important; }
   color: var(--ink-70);
 }
 /* A field's edge needs 3:1 against the page (WCAG 1.4.11); Broadsheet's 16% divider is about 1.1:1. */
-.input { font-size: 1.0625rem; min-height: 44px; padding: var(--space-2); border-color: color-mix(in srgb, var(--color-text) 55%, transparent); }
-@media (hover: hover) and (pointer: fine) { .input:hover { border-color: color-mix(in srgb, var(--color-text) 75%, transparent); } }
+.input { font-size: 1.0625rem; min-height: 44px; padding: var(--space-2) .75rem; background: var(--color-bg); border-color: var(--input-edge); border-radius: var(--radius-md); }
+@media (hover: hover) and (pointer: fine) { .input:hover { border-color: var(--color-text); } }
 textarea.input { line-height: 1.75rem; }
-.input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.input:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
 
-.tag { font-size: 1rem; line-height: 1.5rem; padding: 2px var(--space-2); letter-spacing: 0; }
+.tag { font-size: 1rem; line-height: 1.5rem; padding: 2px .75rem; letter-spacing: 0; border-radius: var(--radius-pill); }
 .table { font-size: 1.0625rem; } /* Broadsheet's 14px is too small for this audience */
-.tag-outline { border-color: var(--color-accent-700); color: var(--color-accent-700); }
+.tag-outline { border-color: var(--action); color: var(--action); }
 /* Waiting for someone: a dashed kaya edge, so "not checked yet" reads without colour too. */
 .tag-pending { border: 1px dashed var(--color-kaya-700); color: var(--color-kaya-700); background: transparent; }
 .tag-caution { background: var(--color-kaya-100); color: var(--color-kaya-800); }
 .tag-row { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); }
 
-.seg-opt { min-height: 44px; min-width: 44px; justify-content: center; padding-inline: var(--space-3); font-size: 1.0625rem; }
-.seg-opt:has(input:checked) { background: var(--color-accent-700); }
+.seg { padding: 3px; gap: 2px; border-radius: calc(var(--radius-md) + 3px); }
+.seg-opt { min-height: 44px; min-width: 44px; justify-content: center; padding-inline: var(--space-3); font-size: 1.0625rem; border-radius: var(--radius-md); }
+.seg-opt + .seg-opt { border-left: 0; }
+.seg-opt:has(input:checked) { background: var(--action); }
 
 .radio { font-size: 1.125rem; line-height: 1.625rem; min-height: 44px; align-items: flex-start; padding-block: var(--space-2); }
 .radio .dot { width: 20px; height: 20px; margin-top: 3px; border-color: var(--ink-70); }
-.radio input:checked + .dot { border-color: var(--color-accent-700); background: var(--color-accent-700); }
+.radio input:checked + .dot { border-color: var(--action); background: var(--action); }
 
 .check { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; cursor: pointer; }
-.check input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--color-accent-700); }
+.check input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--action); }
 
 .progress { height: 4px; background: var(--color-neutral-300); border-radius: var(--radius-sm); overflow: hidden; margin: var(--space-2) 0; }
-.progress span { display: block; height: 100%; background: var(--color-accent-700); }
+.progress span { display: block; height: 100%; background: var(--action); }
 
 /* ---------- header, footer and global UI ---------- */
-.site-bar { padding: var(--space-3) var(--gutter); flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+/* A slim bar (about 54px): 44px tap targets with little padding around them, as on apple.com. */
+.site-bar { padding: var(--space-1) var(--gutter); flex-wrap: wrap; gap: var(--space-1) var(--space-6); }
 
 /* Three zones on every page: header and footer in the surface colour, the body in cream,
    with a single dark line where they meet. */
-.site-header { background: var(--color-surface); border-bottom: 1px solid var(--color-text); padding-top: env(safe-area-inset-top, 0px); }
+.site-header { background: var(--color-bg-inverse); color: var(--color-text-on-inverse); border-bottom: 0; padding-top: env(safe-area-inset-top, 0px); }
 /* Landscape on a notched phone: keep content clear of the notch at the sides. */
 body { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
-.site-header .input { background: var(--color-bg); } /* the language list stands out on the darker header */
-.nav-town { font-weight: 400; color: var(--ink-70); }
-.site-bar .nav-brand { color: var(--color-text); text-decoration: none; font-size: 1.125rem; min-height: 44px; display: inline-flex; align-items: center; gap: var(--space-2); }
-.logo { width: 2.25rem; height: 2.25rem; flex: none; }
-.logo-bg { fill: var(--color-accent-700); }
+/* On the black header: light text, dark controls with a visible edge. */
+.site-header .input { background: var(--color-bg-inverse-raised); color: var(--color-text-on-inverse); border-color: var(--input-edge); }
+.site-header .btn-ghost, .site-header .site-nav a { color: var(--color-text-on-inverse); }
+@media (hover: hover) and (pointer: fine) { .site-header .btn-ghost:hover, .site-header .site-nav a:hover { color: var(--color-text-on-inverse-strong); background: rgba(255, 255, 255, .08); } }
+.site-header .btn-ghost[aria-pressed='true'] { background: rgba(255, 255, 255, .16); color: var(--color-text-on-inverse-strong); }
+.site-header .nav-toggle { color: var(--color-text-on-inverse); border-color: var(--input-edge); border-radius: var(--radius-md); padding-inline: var(--space-4); }
+.site-header :focus-visible { outline-color: var(--action-on-dark); }
+.nav-town { font-weight: 400; color: var(--color-text-on-inverse-muted); }
+.site-bar .nav-brand { color: var(--color-text-on-inverse); text-decoration: none; font-size: 1.125rem; min-height: 44px; display: inline-flex; align-items: center; gap: var(--space-2); }
+.logo { width: 2rem; height: 2rem; flex: none; }
+/* In the header the logo is neutral (a raised dark tile, white mark), so the Pause pill is
+   the only red in the bar. The home-screen icon stays chili, since tapping it opens Pause. */
+.logo-bg { fill: var(--color-bg-inverse-raised); stroke: rgba(255, 255, 255, .14); stroke-width: 1; }
 .logo-line, .logo-tick { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-.logo-line { stroke: var(--color-bg); }
-.logo-tick { stroke: var(--color-accent-2-300); }
+.logo-line, .logo-tick { stroke: var(--color-text-on-inverse-strong); }
 .lang-select { width: auto; min-width: 9rem; }
-.site-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 0 var(--space-4); }
-.site-nav a { font-size: 1.0625rem; min-height: 44px; display: inline-flex; align-items: center; }
-.site-nav a[aria-current='page'] { color: var(--color-accent-700); text-decoration: underline; text-underline-offset: 6px; }
+.site-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 0 var(--space-1); }
+.site-nav a { font-size: 1.0625rem; min-height: 44px; display: inline-flex; align-items: center; padding-inline: .75rem; border-radius: var(--radius-md); text-decoration: none; }
+/* The current page gets the same rounded fill as a pressed A+, not an underline. */
+.site-nav a[aria-current='page'] { color: var(--color-text-on-inverse-strong); background: rgba(255, 255, 255, .16); font-weight: 600; }
 .nav-toggle { display: none; }
-.vol-strip { margin: 0; padding: var(--space-2) var(--gutter); background: var(--color-accent-100); color: var(--color-accent-900); }
+.vol-strip { margin: 0; padding: var(--space-2) var(--gutter); background: var(--action-subtle); color: var(--color-text-on-action-subtle); }
 
 .alert-banner { position: sticky; top: 0; z-index: 45; background: var(--color-accent-2-100); color: var(--color-accent-2-900); transition: transform 250ms var(--ease-out), opacity 250ms var(--ease-out); }
 /* Arrives from the top edge it's pinned to, so it reads as news arriving, not the page jumping. */
@@ -232,7 +270,7 @@ main { outline: none; }
 .fab { display: none; }
 .fab[hidden] { display: none !important; }
 
-.site-footer { background: var(--color-surface); border-top: 1px solid var(--color-text); padding: var(--gap-lg) var(--gutter) var(--bottom); }
+.site-footer { background: var(--color-surface); border-top: 1px solid var(--color-divider); padding: var(--gap-lg) var(--gutter) var(--bottom); }
 .footer-grid { max-width: calc(var(--page-max) - 2 * var(--gutter)); margin-inline: auto; }
 .footer-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) minmax(0, 4fr); gap: var(--gap-xl); }
 .footer-grid p { margin: 0 0 var(--space-3); }
@@ -246,20 +284,20 @@ main { outline: none; }
 .toasts { position: fixed; left: 50%; bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: var(--space-2); width: min(560px, calc(100% - 2 * var(--space-4))); pointer-events: none; }
 .toast {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
-  padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
-  background: var(--color-text); color: var(--color-bg);
+  padding: var(--space-3) var(--space-4); border-radius: 14px; box-shadow: var(--shadow-lg);
+  background: var(--color-text); color: var(--color-text-on-inverse);
   opacity: 0; transform: translateY(var(--space-2)); transition: opacity 250ms var(--ease-out), transform 250ms var(--ease-out); pointer-events: auto;
 }
 .toast.show { opacity: 1; transform: none; }
 .toast.leaving { transition-duration: 150ms; } /* the system responding: faster out than in */
-.toast a { color: var(--color-accent-200); font-weight: 600; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; }
+.toast a { color: var(--action-on-dark); font-weight: 600; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; }
 .toast-warn { background: var(--color-accent-2-800); }
 
 /* Dialogs (Broadsheet .dialog-backdrop / .dialog) */
 .modal[hidden] { display: none; }
 .dialog-backdrop { z-index: 150; overflow-y: auto; }
 .dialog-backdrop { padding: calc(var(--space-4) + env(safe-area-inset-top, 0px)) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom, 0px)); overscroll-behavior: contain; }
-.dialog { width: min(520px, 100%); max-height: calc(100dvh - 2 * var(--space-4)); overflow-y: auto; overscroll-behavior: contain; background: var(--color-bg); gap: var(--space-4); padding: var(--space-6); }
+.dialog { border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); width: min(520px, 100%); max-height: calc(100dvh - 2 * var(--space-4)); overflow-y: auto; overscroll-behavior: contain; background: var(--color-bg); gap: var(--space-4); padding: var(--space-6); }
 .dialog-wide { width: min(720px, 100%); }
 /* Opening a dialog: fade and settle from 97%, never from nothing. Modals stay centred. */
 .dialog-backdrop { transition: opacity 200ms var(--ease-out); }
@@ -304,12 +342,12 @@ main { outline: none; }
 .head-side .kicker { margin-bottom: 0; }
 .display {
   font-family: var(--font-heading); font-weight: var(--font-heading-weight);
-  font-size: 4rem; line-height: 4.375rem; letter-spacing: -0.02em;
-  margin: 0 0 0 -0.035em; max-width: 16ch;
+  font-size: 3.5rem; line-height: 3.75rem; letter-spacing: -0.015em;
+  margin: 0; max-width: 18ch;
 }
 .display .line { display: block; }
 .display:has(.line) { max-width: none; } /* explicit lines set their own measure */
-.display-sm { font-size: 3rem; line-height: 3.375rem; max-width: 22ch; }
+.display-sm { font-size: 2.5rem; line-height: 2.75rem; max-width: 22ch; }
 .section { margin-top: var(--gap-xl); }
 .section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
 .section-title { font-size: 2rem; line-height: 2.5rem; margin: 0; }
@@ -352,18 +390,18 @@ body.route-ask .fab { display: none; }
    each section keeps the page column. */
 .cf-body, .cf-neighbours, .cf-cases { max-width: var(--cf-max); margin-inline: auto; }
 
-.cf-band { background: var(--color-bg); border-top: 1px solid var(--color-text); }
+.cf-band { background: var(--color-surface); }
 .check-first p { margin: 0; }
 
 
 .cf-body { padding: var(--cf-top) var(--cf-gutter) var(--cf-bottom); display: flex; flex-direction: column; gap: var(--cf-stack); }
 .cf-intro { display: flex; flex-direction: column; gap: .375rem; }
-.cf-greeting { font-size: 1.0625rem; font-style: italic; color: var(--color-accent-700); }
+.cf-greeting { font-size: 1.0625rem; font-style: italic; color: var(--ink-78); }
 .cf-greeting[hidden] { display: none; }
 .cf-headline {
   font-family: var(--font-heading); font-weight: var(--font-heading-weight);
-  font-size: 3rem; line-height: 3.375rem; letter-spacing: -0.02em;
-  margin: 0 0 0 -0.035em;
+  font-size: 2.5rem; line-height: 2.75rem; letter-spacing: -0.015em;
+  margin: 0;
 }
 .cf-columns { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: var(--cf-col-gap); align-items: start; }
 
@@ -377,12 +415,12 @@ body.route-ask .fab { display: none; }
 .cf-shot[hidden] { display: none; }
 .cf-shot img { max-height: 7.5rem; width: auto; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
 .cf-help, .cf-note { color: var(--ink-78); }
-.cf-promise { margin: var(--space-2) 0 0; font-weight: 600; color: var(--color-accent-700); }
+.cf-promise { margin: var(--space-2) 0 0; font-weight: 600; color: var(--color-text); }
 .case-wait { margin: 0; font-size: 1rem; color: var(--ink-78); font-variant-numeric: tabular-nums; }
 .case-wait.is-late { color: var(--color-text); }
 .cf-help { font-size: 1.0625rem; line-height: 1.625rem; }
 .cf-help a {
-  color: var(--color-text); font-weight: 600; text-decoration: none;
+  color: var(--action); font-weight: 600; text-decoration: none; /* tappable, so Action Blue like every link */
   /* a 44px-tall tap area without moving the line */
   display: inline-block; padding: var(--space-2) var(--space-1); margin: calc(var(--space-2) * -1) calc(var(--space-1) * -1);
 }
@@ -390,6 +428,8 @@ body.route-ask .fab { display: none; }
 
 .cf-results { display: flex; flex-direction: column; gap: .875rem; }
 .cf-verdict { font-family: var(--font-heading); font-size: 1.75rem; line-height: 2.125rem; color: var(--color-accent-2-700); }
+.cf-verdict[data-level='empty'] { color: var(--ink-70); }
+.cf-verdict[data-level='clear'], .flag-verdict.is-clear { color: var(--color-text); }
 .cf-flags { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .75rem; }
 .cf-flags:empty { display: none; }
 .cf-flags li { display: grid; grid-template-columns: 2rem 1fr; gap: .125rem .625rem; }
@@ -399,7 +439,7 @@ body.route-ask .fab { display: none; }
 .cf-footnote { line-height: 1.625rem; font-style: italic; color: var(--ink-70); }
 
 .cf-more { max-width: 40rem; }
-.cf-more summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--color-accent-700); font-weight: 600; }
+.cf-more summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--action); font-weight: 600; }
 .cf-more-body { display: grid; gap: var(--space-4); padding-top: var(--space-3); }
 .cf-callback { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
 .cf-callback .field:last-child { grid-column: 1 / -1; }
@@ -415,7 +455,7 @@ body.route-ask .fab { display: none; }
 .duty-avatar {
   width: 2.75rem; height: 2.75rem; flex: none; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: var(--color-accent-200); color: var(--color-accent-800);
+  background: var(--color-bg-avatar); color: var(--color-text);
   font-family: var(--font-heading); font-size: 1.0625rem;
 }
 .duty-who { flex: 1 1 10rem; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
@@ -425,7 +465,7 @@ body.route-ask .fab { display: none; }
 .block-title { color: var(--color-text); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
 @media (hover: hover) and (pointer: fine) { .block-title:hover { text-decoration: underline; } }
 .block-leader { flex: 1; min-width: 1.25rem; align-self: center; border-bottom: 1px dotted color-mix(in srgb, var(--color-text) 45%, transparent); }
-.block-count { font-family: var(--font-heading); color: var(--color-accent-700); }
+.block-count { font-family: var(--font-heading); color: var(--color-text); }
 
 .cf-cases { padding: var(--cf-bottom) var(--cf-gutter); }
 .cf-cases h2 { font-size: 2rem; line-height: 2.5rem; margin: 0 0 var(--space-6); }
@@ -441,10 +481,10 @@ body.route-ask .fab { display: none; }
 .msg { max-width: 60ch; padding: var(--space-2) var(--space-3); border-radius: var(--radius-lg); }
 .msg p { margin: 0; overflow-wrap: anywhere; }
 .msg time { display: block; font-size: 1rem; color: var(--ink-70); }
-.msg-me { align-self: flex-end; background: var(--color-accent-700); color: var(--color-bg); }
-.msg-me time, .msg-me .msg-name { color: var(--color-accent-100); }
+.msg-me { align-self: flex-end; background: var(--action); color: var(--color-bg); }
+.msg-me time, .msg-me .msg-name { color: var(--action-subtle); }
 .msg-vol, .msg-them { align-self: flex-start; background: var(--color-surface); }
-.msg-name { display: block; font-weight: 600; color: var(--color-accent-700); }
+.msg-name { display: block; font-weight: 600; color: var(--ink-78); }
 .msg-system { align-self: flex-start; padding-inline: 0; color: var(--ink-70); font-style: italic; }
 .typing .dots { display: inline-flex; gap: 3px; margin-left: var(--space-1); }
 .typing .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--ink-70); animation: blink 1.2s infinite; }
@@ -498,7 +538,7 @@ body.route-ask .fab { display: none; }
 .r-detail { display: block; color: var(--ink-70); font-size: 1rem; }
 .r-desc { display: block; margin-top: var(--space-2); color: var(--ink-78); max-width: 60ch; overflow-wrap: anywhere; }
 .r-desc.is-clamped { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
-.r-more { display: inline-flex; align-items: center; min-height: 44px; padding: 0; border: 0; background: none; font: inherit; font-size: 1rem; color: var(--color-accent-700); text-decoration: underline; cursor: pointer; }
+.r-more { display: inline-flex; align-items: center; min-height: 44px; padding: 0; border: 0; background: none; font: inherit; font-size: 1rem; color: var(--action); text-decoration: underline; cursor: pointer; }
 .r-more[hidden] { display: none; } /* the display above would otherwise override [hidden] */
 .radar-more { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-6) 0 var(--space-2); }
 .radar-more p { margin: 0; }
@@ -521,14 +561,14 @@ body.route-ask .fab { display: none; }
 }
 .cm-head-text { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
 .cm-head-text p { margin: 0; }
-.cm-eyebrow { color: var(--color-accent-700); }
+.cm-eyebrow { color: var(--ink-78); }
 .cm-title { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 2.5rem; line-height: 3rem; letter-spacing: -0.01em; margin: 0; }
 .cm-desc { font-size: 1.0625rem; color: var(--ink-78); }
 .cm-new { white-space: nowrap; }
 
 /* Note above posts and reports translated by AI, with a link back to the original words. */
 .written-note { font-size: 1rem; color: var(--ink-78); margin: var(--space-3) 0 var(--space-4); }
-.written-toggle { background: none; border: 0; padding: 0; font: inherit; color: var(--color-accent-700); text-decoration: underline; cursor: pointer; }
+.written-toggle { background: none; border: 0; padding: 0; font: inherit; color: var(--action); text-decoration: underline; cursor: pointer; }
 
 .cm-body { max-width: var(--page-max); margin-inline: auto; padding: 0 2.5rem var(--bottom); display: flex; flex-wrap: wrap; align-items: flex-start; }
 
@@ -542,7 +582,7 @@ body.route-ask .fab { display: none; }
   background: transparent; border: 0; border-radius: var(--radius-md); cursor: pointer;
 }
 @media (hover: hover) and (pointer: fine) { .cm-topic:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); } }
-.cm-topic[aria-pressed='true'] { background: var(--color-accent-700); color: var(--color-bg); font-weight: 600; }
+.cm-topic[aria-pressed='true'] { background: var(--action); color: var(--color-bg); font-weight: 600; }
 .cm-topic-n { font-family: var(--font-heading); }
 
 .cm-feed { flex: 1 1 520px; min-width: 0; padding: 1.5rem 2rem; }
@@ -554,7 +594,7 @@ body.route-ask .fab { display: none; }
   background: transparent; border: 0; border-bottom: 1px solid var(--color-text); border-radius: 0;
 }
 .cm-search input::placeholder { color: var(--ink-70); }
-.cm-search input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.cm-search input:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
 
 .cm-post { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: var(--space-3); padding: 20px 0; border-bottom: 1px solid var(--cm-rule); }
 .cm-vote { display: flex; flex-direction: column; align-items: center; }
@@ -563,8 +603,8 @@ body.route-ask .fab { display: none; }
   color: var(--ink-70); background: transparent; border: 0; border-radius: var(--radius-md); cursor: pointer;
 }
 @media (hover: hover) and (pointer: fine) { .cm-vote-btn:hover { color: var(--color-text); background: color-mix(in srgb, var(--color-text) 7%, transparent); } }
-.cm-vote-btn[aria-pressed='true'] { color: var(--color-accent-700); background: var(--color-accent-100); }
-.cm-vote-btn[data-vote='-1'][aria-pressed='true'] { color: var(--color-accent-2-700); background: var(--color-accent-2-100); }
+.cm-vote-btn[aria-pressed='true'] { color: var(--action); background: var(--action-subtle); }
+.cm-vote-btn[data-vote='-1'][aria-pressed='true'] { color: var(--color-text); background: var(--color-neutral-200); }
 .cm-score { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 1.125rem; line-height: 1.5rem; }
 .cm-post-body { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
 .cm-post-body p { margin: 0; }
@@ -572,7 +612,7 @@ body.route-ask .fab { display: none; }
 .post-by { color: var(--ink-78); }
 .cm-post-title { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 1.375rem; line-height: 1.875rem; margin: 0; }
 .cm-post-title a { color: var(--color-text); text-decoration: none; display: block; padding-block: .4375rem; margin-block: -.4375rem; } /* 44px tap area */
-@media (hover: hover) and (pointer: fine) { .cm-post-title a:hover { color: var(--color-accent-700); text-decoration: underline; } }
+@media (hover: hover) and (pointer: fine) { .cm-post-title a:hover { color: var(--action); text-decoration: underline; } }
 .cm-excerpt { font-size: 1.0625rem; line-height: 1.625rem; color: var(--ink-78); overflow-wrap: anywhere; }
 
 .cm-poll { max-width: 32rem; padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-1); background: var(--color-surface); border-radius: var(--radius-md); }
@@ -586,7 +626,7 @@ body.route-ask .fab { display: none; }
 .cm-poll-row { display: flex; justify-content: space-between; gap: var(--space-2); }
 .cm-poll-pct { font-family: var(--font-heading); }
 .cm-poll-track { height: 8px; border-radius: 999px; overflow: hidden; background: color-mix(in srgb, var(--color-text) 10%, transparent); }
-.cm-poll-bar { display: block; height: 100%; border-radius: 999px; background: var(--color-accent); transition: width 300ms var(--ease-out); }
+.cm-poll-bar { display: block; height: 100%; border-radius: 999px; background: var(--action); transition: width 300ms var(--ease-out); }
 .cm-poll-bar.is-scam { background: var(--color-accent-2); }
 .cm-poll-note { font-size: 1rem; color: var(--ink-70); padding-inline: var(--space-2); }
 .cm-actions { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); margin-left: calc(var(--space-2) * -1); }
@@ -594,7 +634,7 @@ body.route-ask .fab { display: none; }
 .cm-side { flex: 1 1 280px; min-width: 0; padding: 1.5rem 0; display: flex; flex-direction: column; gap: var(--gap-lg); }
 .cm-side-title {
   margin: 0; padding-top: var(--space-2); border-top: 1px solid var(--color-text);
-  font-family: var(--font-body); font-size: 1rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  font-family: var(--font-body); font-size: 1rem; font-weight: 600; letter-spacing: 0; text-transform: none;
 }
 .cm-side-list { list-style: none; margin: 0; padding: 0; }
 .cm-side-list li { padding: var(--space-3) 0; border-bottom: 1px solid var(--cm-rule); font-size: 1rem; line-height: 1.5rem; }
@@ -605,7 +645,7 @@ body.route-ask .fab { display: none; }
 .post-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin: 0 0 var(--space-2); font-size: 1rem; }
 .post-title { font-size: 1.75rem; line-height: 2.125rem; margin: 0 0 var(--space-2); }
 .post-title a { color: var(--color-text); text-decoration: none; }
-@media (hover: hover) and (pointer: fine) { .post-title a:hover { color: var(--color-accent-700); text-decoration: underline; } }
+@media (hover: hover) and (pointer: fine) { .post-title a:hover { color: var(--action); text-decoration: underline; } }
 .post-excerpt { color: var(--ink-78); max-width: 65ch; margin: 0 0 var(--space-3); overflow-wrap: anywhere; }
 .post-thumb { max-height: 12.5rem; width: auto; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); margin-bottom: var(--space-3); }
 .post-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-4); }
@@ -619,7 +659,7 @@ body.route-ask .fab { display: none; }
 .post-body { font-size: 1.25rem; line-height: 2rem; max-width: 62ch; margin: 0; overflow-wrap: anywhere; }
 .post-img { max-height: 30rem; width: auto; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
 .post-full p { margin: 0; }
-.post-check summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--color-accent-700); font-weight: 600; }
+.post-check summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--action); font-weight: 600; }
 .post-check-body { padding-top: var(--space-3); }
 
 .poll { display: flex; flex-direction: column; gap: var(--space-2); max-width: 560px; }
@@ -631,8 +671,8 @@ body.route-ask .fab { display: none; }
   background: transparent; border: 1px solid var(--color-divider); border-radius: var(--radius-md);
 }
 @media (hover: hover) and (pointer: fine) { .poll-opt:hover { border-color: var(--ink-70); } }
-.poll-opt.chosen { border-color: var(--color-accent-700); font-weight: 600; }
-.poll-bar { position: absolute; inset: 0 auto 0 0; background: var(--color-accent-100); transition: width 300ms var(--ease-out); }
+.poll-opt.chosen { border-color: var(--action); font-weight: 600; }
+.poll-bar { position: absolute; inset: 0 auto 0 0; background: var(--action-subtle); transition: width 300ms var(--ease-out); }
 .poll-label, .poll-pct { position: relative; }
 .poll-pct { font-family: var(--font-heading); }
 
@@ -655,7 +695,7 @@ body.route-ask .fab { display: none; }
    ========================================================== */
 /* Learn: same layout as Community. Courses are rows with a number column. */
 .lr-list { list-style: none; margin: 0; padding: 0; }
-.lr-n { font-family: var(--font-heading); font-size: 1.5rem; line-height: 1.875rem; color: var(--color-accent-2-700); text-align: center; }
+.lr-n { font-family: var(--font-heading); font-size: 1.5rem; line-height: 1.875rem; color: var(--ink-70); text-align: center; }
 .lr-course .progress { margin: 0; max-width: 24rem; }
 .lr-progress { margin: var(--space-2) 0 0; font-size: 1.0625rem; }
 .lr-progress .stat-n { font-size: 2rem; margin-right: var(--space-1); }
@@ -691,9 +731,9 @@ body.route-ask .fab { display: none; }
   display: grid; grid-template-columns: var(--space-8) 1fr auto; align-items: baseline; gap: var(--space-2);
   min-height: 44px; padding: var(--space-2) 0; color: var(--color-text); text-decoration: none;
 }
-@media (hover: hover) and (pointer: fine) { .lesson-steps a:hover .step-title { color: var(--color-accent-700); text-decoration: underline; } }
-.lesson-steps a[aria-current='step'] .step-title { color: var(--color-accent-700); font-weight: 600; }
-.step-n { font-family: var(--font-heading); font-size: 1.25rem; color: var(--color-accent-2-700); }
+@media (hover: hover) and (pointer: fine) { .lesson-steps a:hover .step-title { color: var(--action); text-decoration: underline; } }
+.lesson-steps a[aria-current='step'] .step-title { color: var(--action); font-weight: 600; }
+.step-n { font-family: var(--font-heading); font-size: 1.25rem; color: var(--ink-70); }
 .step-state { font-size: 1rem; color: var(--ink-70); }
 
 .lesson { display: flex; flex-direction: column; gap: var(--space-6); }
@@ -737,7 +777,7 @@ body.route-ask .fab { display: none; }
 .ai-msg p { overflow-wrap: anywhere; }
 .ai-who { color: var(--ink-70); }
 .ai-user { align-self: flex-end; align-items: flex-end; }
-.ai-user p { background: var(--color-accent-700); color: var(--color-bg); padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); font-size: 1.125rem; line-height: 1.75rem; }
+.ai-user p { background: var(--action); color: var(--color-bg); padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); font-size: 1.125rem; line-height: 1.75rem; }
 .ai-assistant p { font-size: 1.25rem; line-height: 2rem; max-width: 62ch; }
 .ai-error p { color: var(--color-accent-2-700); }
 .ai-msg img { max-height: 9rem; width: auto; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
@@ -756,8 +796,9 @@ body.route-ask .fab { display: none; }
    Responsive
    ========================================================== */
 /* ---------- Pause, Kampung Circle and Scam Drills ---------- */
-.site-nav a.nav-pause { color: var(--color-accent-2-700); font-weight: 600; }
-.site-nav a.nav-pause[aria-current='page'] { color: var(--color-accent-2-700); }
+.site-header .site-nav a.nav-pause { color: var(--color-text-on-inverse-strong); background: var(--color-accent-2-700); font-weight: 600; border-radius: var(--radius-pill); padding-inline: 1rem; min-height: 36px; align-self: center; text-decoration: none; }
+@media (hover: hover) and (pointer: fine) { .site-header .site-nav a.nav-pause:hover { background: var(--color-accent-2-800); } }
+/* No extra ring when Pause is the current page: the pill is already the loudest thing in the bar. */
 
 /* Pause is a one-button page, so its top is centred: heading, explanation, the button,
    then who gets the alert. Sections further down stay left-aligned. */
@@ -779,7 +820,7 @@ body.route-ask .fab { display: none; }
   width: 15rem; height: 15rem; flex: none; border: 0; border-radius: 50%; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2);
   background: var(--color-accent-2-700); color: var(--color-bg);
-  box-shadow: 0 0 0 .75rem var(--color-accent-2-100), var(--shadow-lg);
+  box-shadow: 0 0 0 .75rem var(--color-accent-2-100), var(--shadow-product); /* the system's one product shadow */
   font-family: var(--font-heading);
 }
 @media (hover: hover) and (pointer: fine) { .pause-btn:hover { background: var(--color-accent-2-800); } }
@@ -816,7 +857,7 @@ body.route-ask .fab { display: none; }
 .pause-live-more .thread { margin-bottom: 0; }
 .pause-on { font-size: 1rem; line-height: 1.5rem; font-weight: 600; color: var(--color-accent-2-700); }
 .pause-live .pause-team { padding-block: var(--space-2); }
-.pause-msgs summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; font-size: 1.125rem; font-weight: 600; color: var(--color-accent-700); }
+.pause-msgs summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; font-size: 1.125rem; font-weight: 600; color: var(--action); }
 .pause-msgs[open] summary { margin-bottom: var(--space-3); }
 .pause-msgs .reply-form { margin-top: var(--space-3); }
 
@@ -826,7 +867,7 @@ body.route-ask .fab { display: none; }
 .pause-close-title:focus { outline: none; }
 .pause-close .pause-outcomes { display: flex; flex-direction: column; gap: var(--space-2); }
 .pause-close .pause-outcomes .btn { width: 100%; justify-content: flex-start; background: var(--color-bg); }
-.pause-close.is-pending { background: var(--color-accent-100); }
+.pause-close.is-pending { background: var(--color-kaya-100); }
 .close-count { font-variant-numeric: tabular-nums; }
 .pause-close-open .btn { padding-inline: 0; }
 
@@ -913,7 +954,7 @@ body.route-ask .fab { display: none; }
 .drill-phone { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); background: var(--color-surface); border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) 0; }
 .drill-meta { color: var(--ink-78); }
 .drill-text { font-size: 1.25rem; line-height: 1.875rem; overflow-wrap: anywhere; }
-.drill-link { color: var(--color-accent-700); text-decoration: underline; }
+.drill-link { color: var(--action); text-decoration: underline; }
 .drill-actions { display: flex; flex-direction: column; gap: var(--space-2); }
 .drill-actions .btn { width: 100%; }
 
@@ -980,6 +1021,15 @@ body.route-ask .fab { display: none; }
   .pause-page .page-head .display { font-size: 2rem; line-height: 2.375rem; }
   .pause-page .page-head .lede { font-size: 1.0625rem; line-height: 1.625rem; }
   .pause-page .lede-why { display: none; } /* keeps the Pause button on the first screen */
+  /* Large Tamil text: the brand and Menu share one row, and the explanation (repeated under
+     the button in "Who gets the alert") gives way so the Pause button stays on the first screen. */
+  /* Phone bar: logo + name, then the Pause pill and Menu, all on one row. */
+  .site-bar { column-gap: var(--space-2); }
+  .site-bar .nav-brand { flex: 0 1 auto; min-width: 0; font-size: 1rem; }
+  .site-bar .nav-brand > span { white-space: nowrap; }
+  .site-header .nav-toggle { padding-inline: .9rem; }
+  .nav-pause-quick { padding-inline: 1rem; }
+  html.large-text:lang(ta) .pause-page .page-head .lede { display: none; }
   .pause-close, .pause-alertbox, .pause-end-lost { padding: var(--space-4); }
   .call-row .btn { flex: 1 1 100%; justify-content: flex-start; }
   .pause-btn { width: 12rem; height: 12rem; }
@@ -994,10 +1044,6 @@ body.route-ask .fab { display: none; }
   .display { font-size: 3.25rem; line-height: 3.625rem; }
   .display-sm { font-size: 2.5rem; line-height: 2.875rem; }
 
-  .nav-toggle { display: inline-flex; }
-  .site-nav { display: none; flex-basis: 100%; flex-direction: column; align-items: flex-start; padding-bottom: var(--space-3); }
-  .site-nav.open { display: flex; }
-  .site-nav .btn-ghost { padding-inline: 0; }
 
   .page-head, .course-layout, .ai-layout { grid-template-columns: minmax(0, 1fr); }
   .page-head { align-items: start; }
@@ -1009,7 +1055,7 @@ body.route-ask .fab { display: none; }
 
 @media (max-width: 720px) {
   :root { --gutter: var(--space-4); --top: var(--space-8); --bottom: calc(var(--space-8) * 1.6); --gap-lg: var(--space-6); }
-  .display, .cf-headline { font-size: 2.5rem; line-height: 2.875rem; }
+  .display, .cf-headline { font-size: 2.125rem; line-height: 2.5rem; }
   .display-sm { font-size: 2rem; line-height: 2.5rem; }
   .section-title { font-size: 1.625rem; line-height: 2.125rem; }
   .stat-n { font-size: 2rem; line-height: 2.375rem; } /* a town name like "Tampines" fits half the phone width */
@@ -1073,13 +1119,12 @@ body.route-ask .fab { display: none; }
 
 /* ---------- Apple-style layer: materials, type by script, contrast and transparency settings ---------- */
 
-/* Materials: on tablets and computers the header floats as a translucent layer the page scrolls under.
-   On phones it stays in the page, so the Pause button keeps the whole first screen.
-   The single dark line under it stays: it's the house style. */
+/* Materials: on tablets and computers the black header floats as a translucent layer the
+   page scrolls under. On phones it stays in the page, so the Pause button keeps the first screen. */
 @media (min-width: 721px) {
   .site-header {
     position: sticky; top: 0; z-index: 50;
-    background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+    background: color-mix(in srgb, var(--color-bg-inverse) 88%, transparent);
     -webkit-backdrop-filter: blur(20px) saturate(160%);
     backdrop-filter: blur(20px) saturate(160%);
   }
@@ -1092,10 +1137,11 @@ body.route-ask .fab { display: none; }
 :lang(zh) .display, :lang(zh) .display-sm, :lang(zh) .cf-headline, :lang(zh) .pause-headline, :lang(zh) .cm-title, :lang(zh) .pause-btn-word,
 :lang(ta) .cm-title, :lang(ta) .pause-btn-word { letter-spacing: 0; }
 html:lang(ta) body { line-height: 2rem; }
+html:lang(zh) body, html:lang(ta) body { letter-spacing: 0; }
 
 /* "Reduce transparency" in the phone's settings: a solid header, no blur. */
 @media (prefers-reduced-transparency: reduce) {
-  .site-header { background: var(--color-surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .site-header { background: var(--color-bg-inverse); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 
 /* "Increase contrast": darker secondary text, firmer lines and borders, solid header. */
@@ -1103,8 +1149,111 @@ html:lang(ta) body { line-height: 2rem; }
   :root {
     --ink-70: color-mix(in srgb, var(--color-text) 88%, transparent);
     --ink-78: color-mix(in srgb, var(--color-text) 92%, transparent);
-    --color-divider: rgba(42, 33, 24, .55);
+    --color-divider: rgba(0, 0, 0, .55);
+    --input-edge: var(--color-text);
   }
-  .site-header { background: var(--color-surface); -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom-width: 2px; }
+  .site-header { background: #000000; -webkit-backdrop-filter: none; backdrop-filter: none; }
   .btn-secondary, .input, .cm-poll-opt, .poll-opt { border-color: var(--color-text); }
+}
+
+/* Selected text in Action Blue, like the rest of what you can act on. */
+::selection { background: color-mix(in srgb, var(--action) 24%, transparent); }
+
+/* Apple's light/dark tile rhythm, used once: the impact numbers on the Pause page sit on a
+   near-black tile, so the page reads light (the tool) then dark (the proof). */
+#impactZone { background: var(--color-bg-inverse-raised); color: var(--color-text-on-inverse); border-radius: var(--radius-lg); padding: var(--space-8) clamp(var(--space-4), 5vw, var(--gap-xl)); }
+#impactZone .section-title { color: var(--color-text-on-inverse); margin-bottom: var(--space-6); }
+#impactZone .stat-label { color: var(--color-text-on-inverse-muted); }   /* 6.3:1 on the tile */
+#impactZone .stat-n { color: var(--color-text-on-inverse-strong); }
+
+/* Tile rhythm: each page alternates white with one parchment tile, so sections read by
+   surface change instead of rules (Apple's divider). Pause has the dark impact tile;
+   Check a message has the full-width neighbours band above. */
+#radarStats { background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-6) clamp(var(--space-4), 3vw, var(--space-8)); }
+.cm-side > section { background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-4) var(--space-6) var(--space-6); }
+.cm-side > section .cm-side-title { border-top: 0; padding-top: 0; margin-bottom: var(--space-2); }
+.cm-side-list li { border-bottom-color: var(--color-divider); }
+@media (max-width: 720px) {
+  .cm-side > section { padding: var(--space-4); }
+}
+
+/* ---------- Header: three groups ----------
+   Brand on the left, Pause and the pages next to it, then a quiet cluster on the right for
+   settings (language, text size) and the volunteer link, which few visitors need. */
+.site-nav { flex: 1 1 auto; }
+.nav-tools { display: flex; align-items: center; gap: var(--space-1); margin-left: auto; }
+/* Language: a quiet text control with a globe, like A+, not a boxed form field. */
+.site-header .lang-select {
+  -webkit-appearance: none; appearance: none; width: auto; min-width: 0; min-height: 44px;
+  field-sizing: content; /* as wide as the chosen language, not the longest one (where supported) */
+  border: 0; border-radius: var(--radius-md); cursor: pointer; font-weight: 400;
+  color: var(--color-text-on-inverse); background-color: transparent;
+  padding: 0 1.75rem 0 2.15rem;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f6f4f0' stroke-width='1.6'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23a8a399' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat, no-repeat;
+  background-position: .6rem center, right .6rem center;
+  background-size: 1.1rem, .75rem;
+}
+@media (hover: hover) and (pointer: fine) { .site-header .lang-select:hover { background-color: rgba(255, 255, 255, .08); } }
+.site-header .lang-select option { color: var(--color-text); background: var(--color-bg); }
+/* The volunteer link: regular weight and dimmer, so it doesn't outrank the pages. */
+.site-header #volunteerBtn { font-weight: 400; color: var(--color-text-on-inverse-muted); }
+@media (hover: hover) and (pointer: fine) { .site-header #volunteerBtn:hover { color: var(--color-text-on-inverse-strong); } }
+
+/* Below the width where every page link fits on one row, the menu folds away and a Pause
+   pill stays in the bar, so Pause is one tap from every page. Measured: English, Chinese
+   and Malay fit from 1200px; Tamil's longer labels need 1800px. */
+.nav-pause-quick {
+  display: none; align-items: center; min-height: 44px; padding-inline: 1.1rem;
+  border-radius: var(--radius-pill); background: var(--color-accent-2-700);
+  color: var(--color-text-on-inverse-strong); font-weight: 600; text-decoration: none;
+}
+.nav-pause-quick:active { transform: scale(0.95); }
+@media (max-width: 1199px) {
+  .nav-toggle { display: inline-flex; }
+  .site-nav { display: none; flex-basis: 100%; flex-direction: column; align-items: flex-start; padding-bottom: var(--space-3); }
+  .site-nav.open { display: flex; }
+  .site-nav .btn-ghost { padding-inline: .75rem; } /* lines up with the menu links, room for the rounded fill */
+  .nav-pause-quick { display: inline-flex; }
+  .site-header .site-nav a.nav-pause { display: none; } /* already in the bar */
+  .nav-tools { margin-left: 0; flex-wrap: wrap; width: 100%; padding-top: var(--space-2); border-top: 1px solid rgba(255, 255, 255, .12); }
+}
+@media (max-width: 1799px) {
+  html:lang(ta) .nav-toggle { display: inline-flex; }
+  html:lang(ta) .site-nav { display: none; flex-basis: 100%; flex-direction: column; align-items: flex-start; padding-bottom: var(--space-3); }
+  html:lang(ta) .site-nav.open { display: flex; }
+  html:lang(ta) .site-nav .btn-ghost { padding-inline: .75rem; } /* lines up with the menu links, room for the rounded fill */
+  html:lang(ta) .nav-pause-quick { display: inline-flex; }
+  html:lang(ta) .site-header .site-nav a.nav-pause { display: none; } /* already in the bar */
+  html:lang(ta) .nav-tools { margin-left: 0; flex-wrap: wrap; width: 100%; padding-top: var(--space-2); border-top: 1px solid rgba(255, 255, 255, .12); }
+}
+@media (hover: hover) and (pointer: fine) { .nav-pause-quick:hover { background: var(--color-accent-2-800); } }
+/* broadsheet.css turns every .nav link pandan green on hover (its old accent). In this header
+   green means nothing, so the brand and the Pause pill stay white and just brighten. */
+@media (hover: hover) and (pointer: fine) {
+  .site-bar .nav-brand:hover, .site-header a.nav-pause-quick:hover { color: var(--color-text-on-inverse-strong); }
+  .site-bar .nav-brand:hover .logo-bg { fill: #2e2b27; }
+}
+@media (prefers-reduced-motion: reduce) { .nav-pause-quick:active { transform: none; } }
+
+/* The explanation under the Pause headline wraps into even lines, with no word left alone. */
+.pause-page .page-head .lede { text-wrap: balance; }
+
+/* Laptops (961-1440px): the same single row, packed tighter so it doesn't wrap. */
+@media (min-width: 961px) and (max-width: 1440px) {
+  .site-bar { padding-inline: var(--space-8); column-gap: var(--space-4); }
+  .site-nav a, .site-header .nav-tools .btn-ghost { padding-inline: .5rem; font-size: 1rem; }
+  .site-header .site-nav a.nav-pause { padding-inline: .875rem; }
+  .site-header .lang-select { font-size: 1rem; padding-left: 1.95rem; }
+  .nav-tools { gap: 0; }
+}
+
+/* Phones: the logo tile alone, then Pause and Menu, in every language (as apple.com does).
+   Pause and Menu need the room, and the tile matches the home-screen icon. The name stays
+   as the link's text for screen readers. */
+@media (max-width: 480px) {
+  .site-bar .nav-brand > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+  .site-bar .nav-brand { margin-right: auto; }
 }

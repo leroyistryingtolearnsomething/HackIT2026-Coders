@@ -8,7 +8,7 @@ import zlib from 'node:zlib';
 import { WEB_ROOT } from '../src/config.js';
 
 const BG = [0x96, 0x2f, 0x1f];   // --color-accent-2-700, chili
-const FG = [0xf6, 0xf0, 0xe4];   // --color-bg, kopitiam cream
+const FG = [0xff, 0xff, 0xff];   // white, as in the header logo (.logo-line in css/styles.css)
 
 // The logo on a 32-unit grid (same paths as the <svg> in index.html), with pause bars inside.
 const STROKE = 2.4;
