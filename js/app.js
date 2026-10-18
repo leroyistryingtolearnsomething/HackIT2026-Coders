@@ -1206,6 +1206,16 @@
     safe: ['Likely safe', 'tag-accent']
   };
 
+  /* New replies arrive gently. Each thread remembers how many messages it has shown; only the ones
+     after that get .msg-new, so opening a page, changing language or redrawing replays nothing.
+     Only other people's replies move: your own message is already where you're looking. */
+  const threadSeen = new Map();
+  function arrivals(key, messages) {
+    const seen = threadSeen.get(key);
+    threadSeen.set(key, messages.length);
+    return (i, side) => (seen !== undefined && i >= seen && side !== 'me' ? ' msg-new' : '');
+  }
+
   /* Which side of the chat a message sits on depends on who is looking. */
   function messageSide(m, vol) {
     if (m.from === 'system') return 'system';
@@ -1229,6 +1239,7 @@
 
     list.innerHTML = cache.cases.map(c => {
       const status = { waiting: [t('Waiting for volunteer'), 'tag-pending'], replied: [t('Volunteer replied'), 'tag-accent'], resolved: [t('Resolved'), 'tag-neutral'] }[c.status];
+      const isNew = arrivals('case:' + c.id, c.messages);
       return `
         <article class="case" id="case-${esc(c.id)}">
           <header class="case-head">
@@ -1244,8 +1255,8 @@
           <blockquote class="case-quote">${c.text ? nl2br(c.text) : c.image ? `<em>${tx('(screenshot only)')}</em>` : `<em>${tx('(call-back request)')}</em>`}</blockquote>
           ${c.image ? `<img class="case-img" src="${esc(c.image)}" alt="${tx('Screenshot attached to case')}">` : ''}
           <div class="thread">
-            ${c.messages.map(m => `
-              <div class="msg msg-${messageSide(m, vol)}">
+            ${c.messages.map((m, i) => `
+              <div class="msg msg-${messageSide(m, vol)}${isNew(i, messageSide(m, vol))}">
                 ${m.from === 'vol' ? `<span class="msg-name">${esc(m.name)}</span>` : ''}
                 ${m.from === 'resident' && vol ? `<span class="msg-name">${tx('Resident')}</span>` : ''}
                 <p>${written(m.body, { br: true })}</p>
@@ -1336,8 +1347,9 @@
   };
 
   /* ended: how the resident's own Pause just ended, shown until they go back to the button.
-     sendFailed: the last alert didn't go out. msgsOpen: the messages list, opened or closed by hand. */
-  const pauseState = { circle: null, pauses: [], stats: null, drillStats: null, suggest: {}, ended: null, sendFailed: false, msgsOpen: null, closeFor: null };
+     sendFailed: the last alert didn't go out. signsOpen: the folded "What's happening?" checklist,
+    opened or closed by hand. */
+  const pauseState = { circle: null, pauses: [], stats: null, drillStats: null, suggest: {}, ended: null, sendFailed: false, signsOpen: null, closeFor: null };
   let pauseTimer = null;
 
   const fmtClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -1360,7 +1372,7 @@
   async function renderPause(seq, sub) {
     await loadPauseData();
     if (stale(seq)) return;
-    Object.assign(pauseState, { ended: null, msgsOpen: null, closeFor: null });
+    Object.assign(pauseState, { ended: null, signsOpen: null, closeFor: null });
     announced = '';
     main.innerHTML = `
       <div class="page pause-page">
@@ -1384,7 +1396,9 @@
     page.addEventListener('submit', onPauseSubmit);
     page.addEventListener('change', onPauseChange);
     // <details> toggles don't bubble, so listen while the event travels down.
-    page.addEventListener('toggle', e => { if (e.target.matches('[data-msgs]')) pauseState.msgsOpen = e.target.open; }, true);
+    page.addEventListener('toggle', e => {
+      if (e.target.matches('[data-signs]')) pauseState.signsOpen = e.target.open;
+    }, true);
     redrawPause();
     if (sub === 'now') {
       // Back or reload must never send a second alert.
@@ -1573,21 +1587,10 @@
   function pauseLiveHTML(p) {
     const waiting = !p.responder && p.stage === 'circle';
     const deadline = new Date(p.created).getTime() + escalateSeconds() * 1000;
-    const others = p.messages.filter(m => m.from !== 'system').length;
-    const msgsOpen = pauseState.msgsOpen ?? p.messages.some(m => m.from !== 'system' && m.from !== 'resident');
-    return `
-      <div class="pause-live">
-        <div class="pause-live-main">
-          <p class="pause-on">${tx('Pause is on · started {when}', { when: timeAgo(p.created) })}</p>
-          <h2 class="pause-headline" id="pauseHeadline" tabindex="-1">${esc(pauseHeadline(p))}</h2>
-          ${pauseTeamHTML(p)}
-          ${waiting ? `
-            <p class="pause-clock">${th('If no one answers in {time}, volunteers are alerted too.', { time: `<strong id="pauseCountdown" data-deadline="${deadline}">${fmtClock(escalateSeconds())}</strong>` })}</p>
-            <div class="btn-row"><button type="button" class="btn btn-secondary" data-escalate="${esc(p.id)}">${tx('Get a volunteer now')}</button></div>` : ''}
-          ${pauseStepsHTML()}
-        </div>
-        <aside class="pause-live-side" aria-labelledby="signsTitle">
-          <h3 class="pause-side-title" id="signsTitle">${tx('What’s happening? Tap any that apply')}</h3>
+    // Once a helper has written, the conversation is the live part: it comes first and the checklist
+    // folds below it (still one tap away for a silent signal while the scammer is on the line).
+    const helperWrote = p.messages.some(m => m.from !== 'system' && m.from !== 'resident');
+    const signsBody = `
           <div class="sign-list" role="group" aria-labelledby="signsTitle">
             ${KW.PAUSE_SIGNS.map(s => `<button type="button" class="sign-btn" id="sign-${s.id}" data-sign="${s.id}" data-id="${esc(p.id)}" aria-pressed="${p.signs.includes(s.id)}">${tx(s.label)}</button>`).join('')}
           </div>
@@ -1598,14 +1601,37 @@
               ${KW.PAUSE_CALLERS.map(c => `<option value="${esc(c)}" ${p.caller === c ? 'selected' : ''}>${tx(c)}</option>`).join('')}
             </select>
           </div>
-          <p class="muted">${tx('Your Circle sees this straight away, so they know what to say when they call.')}</p>
-        </aside>
-        <div class="pause-live-more">
-          <details class="pause-msgs" data-msgs ${msgsOpen ? 'open' : ''}>
-            <summary>${others ? tx('Messages ({n})', { n: others }) : tx('Messages')}</summary>
+          <p class="muted">${tx('Your Circle sees this straight away, so they know what to say when they call.')}</p>`;
+    const signs = helperWrote ? `
+        <details class="pause-live-side pause-signs-fold" data-signs ${pauseState.signsOpen ? 'open' : ''}>
+          <summary class="pause-side-title" id="signsTitle">${tx('What’s happening? Tap any that apply')}</summary>
+          <div class="pause-signs-body">${signsBody}</div>
+        </details>` : `
+        <aside class="pause-live-side" aria-labelledby="signsTitle">
+          <h3 class="pause-side-title" id="signsTitle">${tx('What’s happening? Tap any that apply')}</h3>${signsBody}
+        </aside>`;
+    // The conversation is always shown: nothing to find or tap to see that help has arrived.
+    const msgs = `
+          <section class="pause-msgs" aria-labelledby="msgsTitle">
+            <h3 class="pause-side-title" id="msgsTitle">${tx('Messages')}</h3>
             ${pauseThread(p)}
             ${pauseReplyForm(p, t('Tell them what’s happening…'))}
-          </details>
+          </section>`;
+    return `
+      <div class="pause-live${helperWrote ? ' has-replies' : ''}">
+        <div class="pause-live-main">
+          <p class="pause-on">${tx('Pause is on · started {when}', { when: timeAgo(p.created) })}</p>
+          <h2 class="pause-headline" id="pauseHeadline" tabindex="-1">${esc(pauseHeadline(p))}</h2>
+          ${pauseTeamHTML(p)}
+          ${waiting ? `
+            <p class="pause-clock">${th('If no one answers in {time}, volunteers are alerted too.', { time: `<strong id="pauseCountdown" data-deadline="${deadline}">${fmtClock(escalateSeconds())}</strong>` })}</p>
+            <div class="btn-row"><button type="button" class="btn btn-secondary" data-escalate="${esc(p.id)}">${tx('Get a volunteer now')}</button></div>` : ''}
+          ${pauseStepsHTML()}
+        </div>
+        ${helperWrote ? '' : signs}
+        <div class="pause-live-more">
+          ${msgs}
+          ${helperWrote ? signs : ''}
           ${closeHTML(p, true)}
         </div>
       </div>`;
@@ -1622,11 +1648,12 @@
 
   function pauseThread(p) {
     const own = p.role === 'owner';
-    return `<div class="thread">${p.messages.map(m => {
+    const isNew = arrivals('pause:' + p.id, p.messages);
+    return `<div class="thread">${p.messages.map((m, i) => {
       const side = m.from === 'system' ? 'system' : m.from === 'resident' ? (own ? 'me' : 'them') : 'vol';
       const name = m.from === 'resident' ? (own ? '' : p.name) : m.name;
       return `
-        <div class="msg msg-${side}">
+        <div class="msg msg-${side}${isNew(i, side)}">
           ${name && side !== 'system' ? `<span class="msg-name">${esc(name)}</span>` : ''}
           <p>${written(m.body, { br: true })}</p>
           <time>${timeAgo(m.at)}</time>
@@ -1660,7 +1687,10 @@
         <div class="pause-close is-pending">
           <p class="pause-close-title">${tx(OUTCOMES[closing.outcome][0])}</p>
           <p>${th('Closing this Pause in {n}. Changed your mind?', { n: `<strong class="close-count" data-close-count>${closing.left}</strong>` })}</p>
-          <button type="button" class="btn btn-secondary btn-lg" data-undo-close="${id}">${tx('Undo, keep this Pause open')}</button>
+          <div class="btn-row">
+            <button type="button" class="btn btn-secondary btn-lg" data-undo-close="${id}">${tx('Undo, keep this Pause open')}</button>
+            <button type="button" class="btn btn-primary btn-lg" data-close-now="${id}">${tx('Close it now')}</button>
+          </div>
         </div>`;
     }
     if (pauseState.closeFor === p.id) {
@@ -1831,7 +1861,8 @@
     const vt = document.startViewTransition(run);
     // The browser runs the update at its next frame; if none comes soon, skip the motion and update now.
     setTimeout(() => { if (!ran) { vt.skipTransition(); run(); } }, 300);
-    vt.finished.finally(() => { if (target) target.style.viewTransitionName = ''; });
+    vt.ready.catch(() => {}); // a skipped transition rejects these; the update itself still ran
+    vt.finished.catch(() => {}).finally(() => { if (target) target.style.viewTransitionName = ''; });
     return vt.updateCallbackDone.catch(() => {}).then(run);
   }
   const pauseButton = () => $('#pauseBtn') || $('#sosBtn');
@@ -2313,6 +2344,8 @@
       startClose(d.id, d.outcome); // sent after 10 seconds unless undone
     } else if (d.undoClose) {
       undoClose();
+    } else if (d.closeNow) {
+      if (closing && closing.id === d.closeNow) finishClose(); // skip the rest of the 10 seconds
     } else if ('endDone' in d) {
       pauseState.ended = null;
       redrawPause();
