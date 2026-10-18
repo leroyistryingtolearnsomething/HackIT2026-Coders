@@ -1279,6 +1279,8 @@
 
     $$('[data-share]', list).forEach(b => b.addEventListener('click', () => act(b, async () => {
       const id = b.dataset.share;
+      // Only the typed text gets names and numbers hidden; a screenshot is posted as it is.
+      if (findCase(id).image && !confirm(t('Your screenshot will be shown as it is. Check it doesn’t show your name or phone number. Share it?'))) return;
       const { postId } = await api.post(`/cases/${encodeURIComponent(id)}/share`);
       update(await api.get('/cases/' + encodeURIComponent(id)));
       toast(t('Shared to the community with personal details hidden.'), 'ok', { link: '#/community/post/' + postId, linkText: t('Open post') });

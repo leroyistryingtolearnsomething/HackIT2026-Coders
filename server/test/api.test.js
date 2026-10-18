@@ -89,14 +89,14 @@ test('report lifecycle: create → confirm → verify', async () => {
   assert.equal(bad.status, 400);
 
   const created = await call('POST', '/reports', {
-    body: { town: 'Bishan', type: 'Bank phishing', channel: 'SMS', title: 'Fake bank SMS, call 91234567', desc: 'Sent to me@example.com', image: PNG }
+    body: { town: 'Bishan', type: 'Bank phishing', channel: 'SMS', title: 'Fake bank SMS, call 91234567, +6581234567 or +65 6123-4567', desc: 'Sent to me@example.com', image: PNG }
   });
   assert.equal(created.status, 201);
   const r = created.data;
   assert.equal(r.status, 'pending');
   assert.equal(r.count, 1);
   assert.equal(r.mine, true);
-  assert.match(r.title, /\[phone hidden\]/);
+  assert.equal(r.title, 'Fake bank SMS, call [phone hidden], [phone hidden] or [phone hidden]');
   assert.match(r.desc, /\[email hidden\]/);
   assert.match(r.image, /^\/uploads\/[a-f0-9]{24}\.png$/);
 
@@ -287,4 +287,12 @@ test('community counts: total and per topic', async () => {
   assert.equal(Object.values(counts.data.byFlair).reduce((a, n) => a + n, 0), counts.data.total);
   const asks = await call('GET', '/posts?flair=ask&limit=100');
   assert.equal(counts.data.byFlair.ask, asks.data.length);
+});
+
+test('a volunteer writing on their own case is the resident, not a volunteer reply', async () => {
+  const mine = await call('POST', '/cases', { body: { channel: 'SMS', text: 'my own question' }, token: volunteerToken });
+  const res = await call('POST', `/cases/${mine.data.id}/messages`, { body: { body: 'more detail' }, token: volunteerToken });
+  assert.equal(res.status, 201);
+  assert.equal(res.data.messages.at(-1).from, 'resident');
+  assert.equal(res.data.status, 'waiting'); // still needs another volunteer
 });

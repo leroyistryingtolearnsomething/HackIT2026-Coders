@@ -23,7 +23,7 @@ export function analyse(text) {
 /* Hide personal details before anything is shown publicly. */
 export function maskPersonal(text) {
   return String(text || '')
-    .replace(/\b[689]\d{3}[ -]?\d{4}\b/g, '[phone hidden]')
+    .replace(/(?<!\d)(?:\+?65[ -]?)?[689]\d{3}[ -]?\d{4}(?!\d)/g, '[phone hidden]')
     .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[email hidden]')
     .replace(/\b[STFGM]\d{7}[A-Z]\b/gi, '[NRIC hidden]');
 }

@@ -70,7 +70,7 @@ export default function casesRouter({ db, hub, images, bot }) {
     if (row.status === 'resolved') throw badRequest('This case is already resolved');
     const body = text(req.body?.body, 'body', { min: 1, max: 3000 });
 
-    if (req.volunteer) {
+    if (req.volunteer && row.client_id !== req.clientId) { // on their own case a volunteer is the resident
       // A human volunteer replying takes the case over from the simulated one.
       const v = req.volunteer;
       transaction(db, () => {
