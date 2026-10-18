@@ -59,8 +59,10 @@ test('volunteer sign-in needs a confirmed identity and the Intermediate courses'
   const signIn = () => call('POST', '/volunteer/login', { body: { role: 'RC Volunteer', area: 'Tampines' } });
   assert.equal((await signIn()).status, 403);
 
-  const steps = await call('POST', '/volunteer/verify', { body: { name: 'Mei' } });
-  assert.equal(steps.data.identity.name, 'Mei');
+  // The demo identity check takes a test identity, never a typed name.
+  assert.equal((await call('POST', '/volunteer/verify', { body: { name: 'Anyone' } })).status, 400);
+  const steps = await call('POST', '/volunteer/verify', { body: { persona: 'tan-wei-jie' } });
+  assert.equal(steps.data.identity.name, 'Tan Wei Jie');
   assert.equal(steps.data.ready, false);
   assert.deepEqual(steps.data.courses.map(c => c.id), Array.from(INTERMEDIATE, c => c.id)); // Array.from: KW lives in another JS realm
   assert.equal((await signIn()).status, 403); // courses not passed yet
@@ -75,11 +77,11 @@ test('volunteer sign-in needs a confirmed identity and the Intermediate courses'
 
   const ok = await becomeVolunteer(call);
   assert.equal(ok.status, 201);
-  assert.equal(ok.data.volunteer.name, 'Mei'); // the confirmed name
+  assert.equal(ok.data.volunteer.name, 'Tan Wei Jie'); // the confirmed name
   assert.equal((await call('GET', '/volunteer/steps')).data.ready, true);
   volunteerToken = ok.data.token;
   const me = await call('GET', '/me', { token: volunteerToken });
-  assert.equal(me.data.volunteer.name, 'Mei');
+  assert.equal(me.data.volunteer.name, 'Tan Wei Jie');
 });
 
 test('report lifecycle: create → confirm → verify', async () => {
@@ -109,7 +111,7 @@ test('report lifecycle: create → confirm → verify', async () => {
   assert.equal((await call('POST', `/reports/${r.id}/verify`)).status, 401);
   const verified = await call('POST', `/reports/${r.id}/verify`, { token: volunteerToken });
   assert.equal(verified.data.status, 'verified');
-  assert.match(verified.data.verifiedBy, /Bishan CC · Mei/);
+  assert.match(verified.data.verifiedBy, /Bishan CC · Tan Wei Jie/);
 
   const discuss = await call('POST', `/reports/${r.id}/discuss`);
   const again = await call('POST', `/reports/${r.id}/discuss`, { client: OTHER });
@@ -143,7 +145,7 @@ test('posts: create, vote, poll, nested comments, verdict', async () => {
   const c2 = await call('POST', `/posts/${p.id}/comments`, { token: volunteerToken, body: { body: 'Yes, scam.', parentId } });
   const reply = c2.data.comments[0].replies[0];
   assert.equal(reply.role, 'Volunteer');
-  assert.equal(reply.author, 'Mei');
+  assert.equal(reply.author, 'Tan Wei Jie');
 
   const voted = await call('POST', `/comments/${reply.id}/vote`, { client: OTHER, body: { value: 1 } });
   assert.equal(voted.data.comments[0].replies[0].score, 2);
@@ -183,7 +185,7 @@ test('cases: private to the resident, answered by volunteers', async () => {
 
   const replied = await call('POST', `/cases/${c.id}/messages`, { client: OTHER, token: volunteerToken, body: { body: 'This is a scam, please block.' } });
   assert.equal(replied.data.status, 'replied');
-  assert.equal(replied.data.volunteer.name, 'Mei');
+  assert.equal(replied.data.volunteer.name, 'Tan Wei Jie');
 
   await call('POST', `/cases/${c.id}/verdict`, { client: OTHER, token: volunteerToken, body: { verdict: 'scam' } });
   const followUp = await call('POST', `/cases/${c.id}/messages`, { body: { body: 'Thank you!' } });

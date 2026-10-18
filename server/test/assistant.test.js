@@ -217,6 +217,27 @@ test('gemini: retries when busy, then falls back to the lighter model', async ()
   assert.ok(evs.some(e => e.type === 'text'));
 });
 
+test('gemini: moves on from a model that never starts replying', async () => {
+  const ok = fakeGemini();
+  const calls = [];
+  const stuck = {
+    models: {
+      async generateContentStream(params) {
+        calls.push(params.model);
+        if (params.model === 'gemini-flash-lite-latest') return ok.models.generateContentStream(params);
+        // the main model takes the request and then says nothing until it's cancelled
+        return new Promise((_, reject) => params.config.abortSignal.addEventListener('abort',
+          () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))));
+      }
+    }
+  };
+  const callG = await start({ assistant: geminiProvider(stuck, 'gemini-flash-latest', { retryDelays: [1], firstReplyTimeout: 20 }) });
+  const evs = await events(await callG('/assistant/chat', { messages: [{ role: 'user', content: 'hi' }] }));
+  assert.deepEqual(calls, ['gemini-flash-latest', 'gemini-flash-lite-latest']);
+  assert.equal(evs.at(-1).type, 'done');
+  assert.ok(evs.some(e => e.type === 'text'));
+});
+
 test('gemini: explains when every model is busy', async () => {
   const always = { models: { async generateContentStream() { throw new ApiError({ message: 'high demand', status: 503 }); } } };
   const callG = await start({ assistant: geminiProvider(always, 'gemini-flash-latest', { retryDelays: [1] }) });

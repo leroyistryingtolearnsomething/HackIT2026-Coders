@@ -8,6 +8,9 @@ const BLOCKED = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'I
 const BUSY = new Set([500, 503, 504]);
 const RETRY_DELAYS_MS = [800, 2000];   // after the 1st and 2nd failed attempt on a model
 const FALLBACK_MODEL = 'gemini-flash-lite-latest'; // lighter model, tried when the main one stays busy
+// Sometimes a model takes the request and then sends nothing at all. A resident shouldn't sit on
+// "Thinking…" for that: if no reply has started by then, give up on that model and try the next one.
+const FIRST_REPLY_TIMEOUT_MS = 15000;
 
 const isBusy = err => err instanceof ApiError && BUSY.has(err.status);
 
@@ -18,7 +21,7 @@ function wait(ms, signal) {
   });
 }
 
-export function geminiProvider(client, model, { retryDelays = RETRY_DELAYS_MS } = {}) {
+export function geminiProvider(client, model, { retryDelays = RETRY_DELAYS_MS, firstReplyTimeout = FIRST_REPLY_TIMEOUT_MS } = {}) {
   const models = model === FALLBACK_MODEL ? [model] : [model, FALLBACK_MODEL];
 
   return {
@@ -36,7 +39,12 @@ export function geminiProvider(client, model, { retryDelays = RETRY_DELAYS_MS } 
       let lastError;
       for (const name of models) {
         for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
-          let sentText = false;
+          let sentText = false, stalled = false;
+          // This attempt stops when the resident leaves, or when the model hasn't started replying in time.
+          const attemptCtl = new AbortController();
+          const stop = () => attemptCtl.abort();
+          signal.addEventListener('abort', stop, { once: true });
+          const timer = setTimeout(() => { stalled = true; stop(); }, firstReplyTimeout);
           try {
             const stream = await client.models.generateContentStream({
               model: name,
@@ -44,12 +52,13 @@ export function geminiProvider(client, model, { retryDelays = RETRY_DELAYS_MS } 
               config: {
                 systemInstruction: `${system}\n\n${context}`,
                 maxOutputTokens: 8192, // replies are short; this caps runaway output
-                abortSignal: signal
+                abortSignal: attemptCtl.signal
               }
             });
 
             let finish = null, blocked = false, usage = {};
             for await (const chunk of stream) {
+              clearTimeout(timer); // it has started replying
               if (chunk.promptFeedback && chunk.promptFeedback.blockReason) blocked = true;
               const text = chunk.text;
               if (text) { sentText = true; onText(text); }
@@ -63,11 +72,20 @@ export function geminiProvider(client, model, { retryDelays = RETRY_DELAYS_MS } 
               model: name
             };
           } catch (err) {
+            if (stalled && !sentText && !signal.aborted) {
+              // Not an abort error: to the caller that means the resident closed the chat.
+              lastError = Object.assign(new Error(`gemini ${name} sent nothing for ${firstReplyTimeout} ms`), { stalled: true });
+              console.warn(`[assistant] gemini ${name} didn’t start replying in time, trying the next model`);
+              break; // a stuck model rarely recovers on a retry; move on
+            }
             // Only retry when it's a busy signal and the resident hasn't seen any of this reply yet.
             if (sentText || !isBusy(err) || signal.aborted) throw err;
             lastError = err;
             console.warn(`[assistant] gemini ${name} busy (${err.status}), attempt ${attempt + 1}`);
             if (attempt < retryDelays.length) await wait(retryDelays[attempt], signal);
+          } finally {
+            clearTimeout(timer);
+            signal.removeEventListener('abort', stop);
           }
         }
       }
@@ -77,6 +95,7 @@ export function geminiProvider(client, model, { retryDelays = RETRY_DELAYS_MS } 
     isAbort: err => err && err.name === 'AbortError',
 
     describeError(err) {
+      if (err && err.stalled) return 'The free AI service is very busy right now. Please try again in a minute, or ask a volunteer.';
       if (err instanceof ApiError) {
         if (BUSY.has(err.status)) return 'The free AI service is very busy right now. Please try again in a minute, or ask a volunteer.';
         if (err.status === 429) return 'The free AI limit has been reached for now. Please try again in a minute, or ask a volunteer.';

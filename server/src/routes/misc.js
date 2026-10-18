@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { Router } from 'express';
 import { requireClient, handleFor, hashToken, rateLimit } from '../auth.js';
 import { KW, TOWNS } from '../shared.js';
-import { text, oneOf, HttpError, nowIso } from '../http.js';
+import { oneOf, HttpError, nowIso } from '../http.js';
 import { VOLUNTEER_COURSES, passedCourses } from './learn.js';
 
 const ROLES = ['Digital Ambassador', 'RC Volunteer', 'Student Volunteer', 'CC Scam-Buster'];
@@ -59,9 +59,13 @@ export default function miscRouter({ db, hub, config, bot, assistant }) {
 
   r.get('/volunteer/steps', requireClient, (req, res) => res.json(volunteerSteps(req.clientId)));
 
-  /* Demo only: a real launch would send the volunteer to Singpass and take the name it returns. */
+  /* Demo only: a real launch sends the volunteer to Singpass and takes the name it returns.
+     Here the stand-in Singpass step returns one of the fixed test identities in js/data.js
+     (KW.DEMO_IDENTITIES), so no one can type their way into a name. */
   r.post('/volunteer/verify', requireClient, rateLimit({ max: 10 }), (req, res) => {
-    const name = text(req.body?.name, 'name', { min: 2, max: 40 });
+    const persona = KW.DEMO_IDENTITIES.find(p => p.id === req.body?.persona);
+    if (!persona) throw new HttpError(400, 'Choose one of the demo identities.');
+    const name = persona.name;
     db.prepare(`INSERT INTO identity_checks (client_id, name, method, verified_at) VALUES (?, ?, 'singpass-demo', ?)
       ON CONFLICT (client_id) DO UPDATE SET name = excluded.name, method = excluded.method, verified_at = excluded.verified_at`)
       .run(req.clientId, name, nowIso());

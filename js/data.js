@@ -63,6 +63,15 @@ KW.VOLUNTEERS = [
   { name: 'Mr Rahman', role: 'RC Chairman', area: 'Bedok', langs: 'English, Melayu' }
 ];
 
+/* Volunteer sign-up, demo only: the stand-in "Singpass" step returns one of these test
+   identities. A real launch takes the name from Singpass itself, so nobody types it. */
+KW.DEMO_IDENTITIES = [
+  { id: 'tan-wei-jie', name: 'Tan Wei Jie' },
+  { id: 'nur-aisyah', name: 'Nur Aisyah binte Ahmad' },
+  { id: 'priya-ramasamy', name: 'Priya d/o Ramasamy' },
+  { id: 'lim-jia-hui', name: 'Lim Jia Hui' }
+];
+
 KW.HELPLINES = [
   { label: 'ScamShield Helpline', number: '1799', note: '24/7 scam advice' },
   { label: 'Police (emergency)', number: '999', note: 'If you are in danger or money is being taken now' },

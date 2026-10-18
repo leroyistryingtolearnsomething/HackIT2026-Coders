@@ -13,6 +13,188 @@
   <script src="_ds/broadsheet-d54dd915-6f97-48e1-95d7-02ea80b887b9/_ds_bundle.js"></script>
   <style>body{margin:0;text-wrap:pretty;background:var(--color-bg);} a{color:var(--color-accent-700);} a:hover{color:var(--color-accent-900);}</style>
 </helmet>
+<section data-screen-label="Turn 2" style="padding:64px;display:flex;flex-direction:column;gap:32px;">
+  <div style="display:flex;flex-direction:column;gap:8px;max-width:76ch;">
+    <span style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);">Turn 2 · Check First, made kampung</span>
+    <p style="margin:0;font-size:17px;line-height:28px;">Three takes on <a href="#1b">1b</a> with tighter spacing, warmer colours and real neighbours in the picture: <a href="#2a">2a</a> Kopitiam Corner (pandan &amp; chili), <a href="#2b">2b</a> Kopi Talk (Peranakan jade &amp; pink), <a href="#2c">2c</a> Gotong Royong Board (batik indigo &amp; terracotta). All three checkers work.</p>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start;">
+
+    <!-- 2a KOPITIAM CORNER -->
+    <div id="2a" data-screen-label="2a Kopitiam Corner" style="width:1100px;flex:none;display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;gap:12px;align-items:baseline;"><span class="tag tag-accent">2a</span><span style="font-size:17px;">Kopitiam Corner — checker up top, the neighbours on duty right beside it</span></div>
+      <div style="--color-bg:#f6f0e4;--color-surface:#ece3d1;--color-text:#2a2118;--color-divider:rgba(42,33,24,.16);--color-accent:#2f7d55;--color-accent-100:#e6f3ea;--color-accent-200:#c9e6d3;--color-accent-300:#9fd2b2;--color-accent-400:#5fae84;--color-accent-500:#3f9268;--color-accent-600:#276b48;--color-accent-700:#1e5638;--color-accent-800:#164029;--color-accent-900:#0f2b1c;--color-accent-2:#c4402b;--color-accent-2-100:#fbe9e4;--color-accent-2-200:#f6cfc6;--color-accent-2-600:#ab3724;--color-accent-2-700:#962f1f;--color-accent-2-800:#6e2216;background:var(--color-bg);color:var(--color-text);box-shadow:var(--shadow-md);">
+        <nav class="nav" style="padding-inline:48px;">
+          <span class="nav-brand">Kampung Watch <span style="font-weight:400;color:color-mix(in srgb,var(--color-text) 70%,transparent);">· Tampines West</span></span>
+          <div class="seg" role="radiogroup" aria-label="Language">
+            <label class="seg-opt"><input type="radio" name="lang-2a" checked="">EN</label>
+            <label class="seg-opt"><input type="radio" name="lang-2a">华语</label>
+            <label class="seg-opt"><input type="radio" name="lang-2a">Melayu</label>
+            <label class="seg-opt"><input type="radio" name="lang-2a">தமிழ்</label>
+          </div>
+          <button type="button" class="btn btn-ghost">A+</button>
+        </nav>
+        <div style="padding:36px 48px 44px;display:flex;flex-direction:column;gap:28px;">
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <span style="font-size:17px;font-style:italic;color:var(--color-accent-700);">Selamat petang, Aunty Rosnah.</span>
+            <h1 style="font-family:var(--font-heading);font-weight:var(--font-heading-weight);font-size:48px;line-height:54px;letter-spacing:-0.02em;margin:0 0 0 -0.035em;">Got a message that feels off? Ask the kampung.</h1>
+          </div>
+          <div style="display:grid;grid-template-columns:minmax(0,6fr) minmax(0,5fr);gap:40px;align-items:start;">
+            <div style="display:flex;flex-direction:column;gap:14px;">
+              <div class="field"><label for="ta-2a" style="font-size:19px;">Paste it, or upload a screenshot</label>
+                <textarea id="ta-2a" class="input" rows="5" style="resize:vertical;font:inherit;font-size:20px;line-height:30px;padding:14px;" value="{{ text2a }}" onChange="{{ onText2a }}" placeholder="Paste the message here"></textarea></div>
+              <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <button type="button" class="btn btn-primary" style="min-height:52px;font-size:18px;padding-inline:22px;">Ask a neighbour now</button>
+                <button type="button" class="btn btn-secondary" style="min-height:52px;font-size:18px;padding-inline:22px;">Upload screenshot</button>
+              </div>
+              <p style="margin:0;font-size:17px;line-height:26px;color:color-mix(in srgb,var(--color-text) 78%,transparent);">Money leaving your account now? Call <strong>999</strong>. For advice, ScamShield <strong>1799</strong>, any time.</p>
+            </div>
+            <div aria-live="polite" style="display:flex;flex-direction:column;gap:14px;">
+              <span style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);">What we noticed</span>
+              <span style="font-family:var(--font-heading);font-size:28px;line-height:34px;color:var(--color-accent-2-700);">{{ verdict2a }}</span>
+              <ol style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px;">
+                <sc-for list="{{ flags2a }}" as="f" hint-placeholder-count="3">
+                  <li style="display:grid;grid-template-columns:32px 1fr;gap:2px 10px;">
+                    <span style="font-family:var(--font-heading);font-size:24px;line-height:28px;color:var(--color-accent-2-700);grid-row:span 2;">{{ f.n }}</span>
+                    <span style="font-size:19px;line-height:26px;font-weight:600;">{{ f.label }}</span>
+                    <span style="font-size:17px;line-height:24px;color:color-mix(in srgb,var(--color-text) 78%,transparent);">{{ f.tip }}</span>
+                  </li>
+                </sc-for>
+              </ol>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:minmax(0,6fr) minmax(0,5fr);gap:40px;padding-top:24px;border-top:1px solid var(--color-divider);">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              <span style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);">Neighbours on duty tonight</span>
+              <sc-for list="{{ duty }}" as="d" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:14px;">
+                  <span style="width:44px;height:44px;flex:none;border-radius:50%;background:var(--color-accent-200);color:var(--color-accent-800);display:flex;align-items:center;justify-content:center;font-family:var(--font-heading);font-size:17px;">{{ d.initials }}</span>
+                  <span style="flex:1;display:flex;flex-direction:column;"><span style="font-size:18px;line-height:24px;font-weight:600;">{{ d.name }}</span><span style="font-size:15.5px;line-height:22px;color:color-mix(in srgb,var(--color-text) 72%,transparent);">{{ d.role }} · {{ d.langs }}</span></span>
+                  <button type="button" class="btn btn-ghost">Call me back</button>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              <span style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);">Going round your block this week</span>
+              <sc-for list="{{ alerts }}" as="al" hint-placeholder-count="4">
+                <p style="display:flex;align-items:baseline;gap:8px;margin:0;font-size:17px;line-height:26px;"><span>{{ al.title }}</span><span style="flex:1;min-width:20px;align-self:flex-end;margin-bottom:.34em;border-bottom:1px dotted color-mix(in srgb,var(--color-text) 45%,transparent);"></span><span style="font-family:var(--font-heading);color:var(--color-accent-700);">{{ al.count }}</span></p>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2b KOPI TALK -->
+    <div id="2b" data-screen-label="2b Kopi Talk" style="width:1100px;flex:none;display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;gap:12px;align-items:baseline;"><span class="tag tag-accent">2b</span><span style="font-size:17px;">Kopi Talk — the answer comes back as a conversation with a real neighbour</span></div>
+      <div style="--color-bg:#f7f1ea;--color-surface:#eee4d8;--color-text:#26201d;--color-divider:rgba(38,32,29,.16);--color-accent:#13827a;--color-accent-100:#e3f5f2;--color-accent-200:#c2e8e2;--color-accent-300:#8fd4ca;--color-accent-400:#4fb3a8;--color-accent-500:#22978d;--color-accent-600:#0f6f68;--color-accent-700:#0b5953;--color-accent-800:#08433f;--color-accent-900:#052d2a;--color-accent-2:#c2386e;--color-accent-2-100:#fbe8ef;--color-accent-2-200:#f5cbdb;--color-accent-2-600:#a82f5f;--color-accent-2-700:#922754;--color-accent-2-800:#6a1c3d;background:var(--color-bg);color:var(--color-text);box-shadow:var(--shadow-md);">
+        <nav class="nav" style="padding-inline:48px;">
+          <span class="nav-brand">Kampung Watch</span>
+          <div class="seg" role="radiogroup" aria-label="Language">
+            <label class="seg-opt"><input type="radio" name="lang-2b" checked="">EN</label>
+            <label class="seg-opt"><input type="radio" name="lang-2b">华语</label>
+            <label class="seg-opt"><input type="radio" name="lang-2b">Melayu</label>
+            <label class="seg-opt"><input type="radio" name="lang-2b">தமிழ்</label>
+          </div>
+          <button type="button" class="btn btn-ghost">A+</button>
+        </nav>
+        <div style="padding:36px 48px 44px;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:40px;align-items:start;">
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <h1 style="font-family:var(--font-heading);font-weight:var(--font-heading-weight);font-size:46px;line-height:52px;letter-spacing:-0.02em;margin:0 0 0 -0.035em;">Unsure? Let's talk it over, kopi-style.</h1>
+            <p style="margin:0;font-size:17px;line-height:26px;color:color-mix(in srgb,var(--color-text) 78%,transparent);">Paste what you got. A volunteer from your CC replies in your language, usually within five minutes.</p>
+            <div class="field"><label for="ta-2b" style="font-size:19px;">The message you received</label>
+              <textarea id="ta-2b" class="input" rows="5" style="resize:vertical;font:inherit;font-size:20px;line-height:30px;padding:14px;" value="{{ text2b }}" onChange="{{ onText2b }}" placeholder="Paste the message here"></textarea></div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+              <button type="button" class="btn btn-primary" style="min-height:52px;font-size:18px;padding-inline:22px;">Send to a neighbour</button>
+              <button type="button" class="btn btn-secondary" style="min-height:52px;font-size:18px;padding-inline:22px;">Upload screenshot</button>
+            </div>
+            <p style="margin:0;font-size:17px;line-height:26px;">Money leaving now? Call <strong>999</strong>. Advice: <strong>1799</strong>.</p>
+          </div>
+          <div aria-live="polite" style="display:flex;flex-direction:column;gap:14px;">
+            <span style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);">Your conversation</span>
+            <div style="background:var(--color-surface);border-radius:var(--radius-md);padding:16px 18px;display:flex;flex-direction:column;gap:10px;">
+              <span style="font-size:15.5px;color:color-mix(in srgb,var(--color-text) 72%,transparent);">Kampung Watch · just now</span>
+              <span style="font-family:var(--font-heading);font-size:24px;line-height:30px;color:var(--color-accent-2-700);">{{ verdict2b }}</span>
+              <sc-for list="{{ flags2b }}" as="f" hint-placeholder-count="3">
+                <span style="font-size:17px;line-height:25px;"><strong>{{ f.n }}. {{ f.label }}.</strong> {{ f.tip }}</span>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start;">
+              <span style="width:44px;height:44px;flex:none;border-radius:50%;background:var(--color-accent-200);color:var(--color-accent-800);display:flex;align-items:center;justify-content:center;font-family:var(--font-heading);font-size:17px;">ML</span>
+              <div style="flex:1;background:var(--color-accent-100);border-radius:var(--radius-md);padding:14px 18px;display:flex;flex-direction:column;gap:6px;">
+                <span style="font-size:15.5px;color:var(--color-accent-800);"><strong>Aunty Mei Ling</strong> · CC Scam-Buster, Tampines West · 2 min</span>
+                <span style="font-size:19px;line-height:28px;">Don't pay ah. SingPost never ask for redelivery fee by SMS. Delete it and block the number. Want me to call you?</span>
+              </div>
+            </div>
+            <p style="margin:0 0 0 56px;font-size:17px;line-height:26px;color:var(--color-accent-2-700);"><strong>3 neighbours at Blk 201</strong> got the same message today.</p>
+            <div style="margin-left:56px;display:flex;gap:10px;flex-wrap:wrap;">
+              <button type="button" class="btn btn-primary">Yes, call me</button>
+              <button type="button" class="btn btn-secondary">Thank you, Aunty</button>
+              <button type="button" class="btn btn-ghost">Warn my block</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2c GOTONG ROYONG BOARD -->
+    <div id="2c" data-screen-label="2c Gotong Royong Board" style="width:1100px;flex:none;display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;gap:12px;align-items:baseline;"><span class="tag tag-accent">2c</span><span style="font-size:17px;">Gotong Royong Board — check, then warn the block together</span></div>
+      <div style="--color-bg:#efe7d8;--color-surface:#e4d9c4;--color-text:#221d18;--color-divider:rgba(34,29,24,.18);--color-accent:#34509a;--color-accent-100:#e8edf9;--color-accent-200:#ccd7f1;--color-accent-300:#a3b6e4;--color-accent-400:#6f88c9;--color-accent-500:#4a66b0;--color-accent-600:#2c4486;--color-accent-700:#23366c;--color-accent-800:#1a2851;--color-accent-900:#111b37;--color-accent-2:#b8551c;--color-accent-2-100:#f8eadf;--color-accent-2-200:#f0d2bd;--color-accent-2-600:#9f4918;--color-accent-2-700:#8a3e12;--color-accent-2-800:#632c0c;background:var(--color-bg);color:var(--color-text);box-shadow:var(--shadow-md);">
+        <nav class="nav" style="padding-inline:48px;">
+          <span class="nav-brand">Kampung Watch</span>
+          <div class="seg" role="radiogroup" aria-label="Language">
+            <label class="seg-opt"><input type="radio" name="lang-2c" checked="">EN</label>
+            <label class="seg-opt"><input type="radio" name="lang-2c">华语</label>
+            <label class="seg-opt"><input type="radio" name="lang-2c">Melayu</label>
+            <label class="seg-opt"><input type="radio" name="lang-2c">தமிழ்</label>
+          </div>
+          <button type="button" class="btn btn-ghost">A+</button>
+        </nav>
+        <div style="padding:36px 48px 44px;display:flex;flex-direction:column;gap:28px;">
+          <div style="display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:40px;align-items:start;">
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <span style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-accent-700);">{{ town }} · Blk 201–215</span>
+              <h1 style="font-family:var(--font-heading);font-weight:var(--font-heading-weight);font-size:48px;line-height:54px;letter-spacing:-0.02em;margin:0 0 0 -0.035em;">One check protects the whole block.</h1>
+              <p style="margin:0;font-size:17px;line-height:26px;color:color-mix(in srgb,var(--color-text) 78%,transparent);">Paste the message. If it's a scam, one tap warns your neighbours before they get it too.</p>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px;">
+              <div class="field"><label for="ta-2c" style="font-size:19px;">Paste it, or upload a screenshot</label>
+                <textarea id="ta-2c" class="input" rows="4" style="resize:vertical;font:inherit;font-size:20px;line-height:30px;padding:14px;" value="{{ text2c }}" onChange="{{ onText2c }}" placeholder="Paste the message here"></textarea></div>
+              <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <button type="button" class="btn btn-primary" style="min-height:52px;font-size:18px;padding-inline:22px;">Ask a volunteer</button>
+                <button type="button" class="btn btn-secondary" style="min-height:52px;font-size:18px;padding-inline:22px;">Upload screenshot</button>
+                <span style="align-self:center;font-size:17px;">or call <strong>1799</strong> · emergency <strong>999</strong></span>
+              </div>
+            </div>
+          </div>
+          <div aria-live="polite" style="display:flex;flex-direction:column;gap:14px;">
+            <span style="font-family:var(--font-heading);font-size:28px;line-height:34px;color:var(--color-accent-2-700);">{{ verdict2c }}</span>
+            <ol style="margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px 32px;">
+              <sc-for list="{{ flags2c }}" as="f" hint-placeholder-count="3">
+                <li style="display:flex;flex-direction:column;gap:4px;">
+                  <span style="font-family:var(--font-heading);font-size:30px;line-height:32px;color:var(--color-accent-2-700);">{{ f.n }}</span>
+                  <span style="font-size:19px;line-height:26px;font-weight:600;">{{ f.label }}</span>
+                  <span style="font-size:17px;line-height:24px;color:color-mix(in srgb,var(--color-text) 78%,transparent);">{{ f.tip }}</span>
+                </li>
+              </sc-for>
+            </ol>
+          </div>
+          <div style="background:var(--color-surface);border-radius:var(--radius-md);padding:20px 24px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:24px;align-items:center;">
+            <span style="font-family:var(--font-heading);font-weight:var(--font-heading-weight);font-size:56px;line-height:56px;color:var(--color-accent-700);">42</span>
+            <span style="font-size:19px;line-height:28px;"><strong>neighbours in {{ town }}</strong> got this SingPost SMS this week. Uncle Tan (RC volunteer) has confirmed it's a scam. You're not alone.</span>
+            <span style="display:flex;flex-direction:column;gap:8px;">
+              <button type="button" class="btn btn-primary" style="min-height:48px;">I got this too</button>
+              <button type="button" class="btn btn-ghost">Warn my block chat</button>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
 <section data-screen-label="Turn 1" style="padding:64px;display:flex;flex-direction:column;gap:40px;">
   <div style="display:flex;flex-direction:column;gap:8px;max-width:72ch;">
     <span style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--color-text) 70%,transparent);">Turn 1 · Three directions for Kampung Watch</span>
@@ -200,11 +382,25 @@ function check(t) {
   return { flags, v };
 }
 class Component extends DCLogic {
-  state = { textA: SAMPLE, textB: SAMPLE };
+  state = { textA: SAMPLE, textB: SAMPLE, t2a: SAMPLE, t2b: SAMPLE, t2c: SAMPLE };
   renderVals() {
     const a = check(this.state.textA), b = check(this.state.textB);
+    const c2a = check(this.state.t2a), c2b = check(this.state.t2b), c2c = check(this.state.t2c);
+    const turn2 = {
+      text2a: this.state.t2a, text2b: this.state.t2b, text2c: this.state.t2c,
+      onText2a: e => this.setState({ t2a: e.target.value }),
+      onText2b: e => this.setState({ t2b: e.target.value }),
+      onText2c: e => this.setState({ t2c: e.target.value }),
+      flags2a: c2a.flags, verdict2a: c2a.v, flags2b: c2b.flags, verdict2b: c2b.v, flags2c: c2c.flags, verdict2c: c2c.v,
+      duty: [
+        { initials: 'ML', name: 'Aunty Mei Ling', role: 'CC Scam-Buster', langs: 'English, 华语, Hokkien' },
+        { initials: 'HF', name: 'Hafiz', role: 'RC volunteer, Blk 201', langs: 'English, Melayu' },
+        { initials: 'KR', name: 'Mrs Kavitha', role: 'RC volunteer, Blk 208', langs: 'English, தமிழ்' }
+      ]
+    };
     const town = this.props.town ?? 'Tampines';
     return {
+      ...turn2,
       town,
       textA: this.state.textA, textB: this.state.textB,
       onTextA: e => this.setState({ textA: e.target.value }),

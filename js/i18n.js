@@ -314,6 +314,7 @@ KW.COPY = {
     ["{n} of {total} practice scams passed", "{total} 次练习骗局中通过 {n} 次", "{n} daripada {total} penipuan latihan lulus", "{total} பயிற்சி மோசடிகளில் {n} தேர்ச்சி"],
     ["{n} of {total} right", "答对 {n}/{total}", "{n} daripada {total} betul", "{total} இல் {n} சரி"],
     ["{n} of {total}. So close.", "{n}/{total}。差一点就过了。", "{n} daripada {total}. Hampir berjaya.", "{total} இல் {n}. கிட்டத்தட்ட வந்துவிட்டீர்கள்."],
+    ["{n} of {total}. Not this time.", "{n}/{total}。这次还没过。", "{n} daripada {total}. Belum berjaya kali ini.", "{total} இல் {n}. இந்த முறை இல்லை."],
     ["{n} posts", "{n} 个帖子", "{n} hantaran", "{n} பதிவுகள்"],
     ["{n} replies", "{n} 条回复", "{n} balasan", "{n} பதில்கள்"],
     ["{n} reply", "{n} 条回复", "{n} balasan", "{n} பதில்"],
@@ -663,6 +664,7 @@ KW.COPY = {
     ["No one yet. Until someone joins, your Pause alerts go to volunteers.", "还没有人。在有人加入之前，您的暂停通知会发给义工。", "Belum ada sesiapa. Sehingga seseorang menyertai, amaran Jeda anda dihantar kepada sukarelawan.", "இன்னும் யாரும் இல்லை. யாராவது சேரும் வரை, உங்கள் நிறுத்த அறிவிப்புகள் தொண்டூழியர்களுக்குப் போகும்."],
     ["No Pause right now. If {name} presses it, you’ll get an alert on any page of Kampung Watch.", "目前没有暂停。如果 {name} 按下暂停，您在 Kampung Watch 的任何页面都会收到通知。", "Tiada Jeda sekarang. Jika {name} menekannya, anda akan menerima amaran di mana-mana halaman Kampung Watch.", "இப்போது நிறுத்தம் இல்லை. {name} அதை அழுத்தினால், Kampung Watch இன் எந்தப் பக்கத்திலும் உங்களுக்கு அறிவிப்பு வரும்."],
     ["No posts here yet. Be the first to start the conversation.", "这里还没有帖子。来做第一个开话题的人吧。", "Belum ada hantaran di sini. Jadilah yang pertama memulakan perbualan.", "இங்கு இன்னும் பதிவுகள் இல்லை. உரையாடலை முதலில் தொடங்குங்கள்."],
+    ["No posts match “{q}”. Try fewer or different words.", "没有符合“{q}”的帖子。试试少一点或换个词。", "Tiada hantaran yang sepadan dengan “{q}”. Cuba kurangkan perkataan atau guna perkataan lain.", "“{q}” உடன் பொருந்தும் பதிவுகள் இல்லை. குறைவான அல்லது வேறு சொற்களை முயற்சிக்கவும்."],
     ["No practice scams sent yet.", "还没有发送练习骗局。", "Belum ada penipuan latihan dihantar.", "இன்னும் பயிற்சி மோசடிகள் அனுப்பப்படவில்லை."],
     ["No reports match these filters.", "没有符合这些筛选的报告。", "Tiada laporan sepadan dengan penapis ini.", "இந்த வடிகட்டிகளுக்குப் பொருந்தும் புகார்கள் இல்லை."],
     ["None", "无", "Tiada", "இல்லை"],
@@ -1006,7 +1008,28 @@ KW.COPY = {
     ["Your Circle can see how this Pause ended, so they can help with the calls. This is not your fault: scammers do this for a living.", "您的互助圈看得到这次暂停求助的结果，可以帮您打这些电话。这不是您的错：骗子就是靠这个为生的。", "Bulatan anda boleh lihat bagaimana Jeda ini berakhir, jadi mereka boleh bantu membuat panggilan. Ini bukan salah anda: penipu melakukan ini sebagai mata pencarian.", "இந்த நிறுத்தம் எப்படி முடிந்தது என்பதை உங்கள் வட்டம் பார்க்க முடியும், எனவே அழைப்புகளைச் செய்ய அவர்கள் உதவலாம். இது உங்கள் தவறு அல்ல: மோசடிக்காரர்கள் இதையே தொழிலாகச் செய்கிறார்கள்."],
     ["Your Circle gets an alert and calls you. If no one answers within {wait}, a volunteer near you steps in.", "您的互助圈会收到通知并打电话给您。如果 {wait}内没人回应，您附近的义工就会介入。", "Bulatan anda menerima amaran dan menelefon anda. Jika tiada siapa menjawab dalam {wait}, sukarelawan berhampiran anda akan membantu.", "உங்கள் வட்டத்துக்கு அறிவிப்பு போய், அவர்கள் உங்களை அழைப்பார்கள். {wait} இல் யாரும் பதிலளிக்கவில்லை என்றால், உங்கள் அருகிலுள்ள தொண்டூழியர் உதவ வருவார்."],
     ["Your Pause is closed. Pressing it was the right call: no one minds a false alarm.", "您的暂停求助已结束。按下它是对的：没有人会介意虚惊一场。", "Jeda anda telah ditutup. Menekannya ialah keputusan yang betul: tiada siapa kisah tentang penggera palsu.", "உங்கள் நிறுத்தம் முடிந்தது. அதை அழுத்தியது சரியான முடிவு: தவறான எச்சரிக்கையை யாரும் பொருட்படுத்த மாட்டார்கள்."],
-    ["Your Pause is still on.", "您的暂停求助仍在进行中。", "Jeda anda masih aktif.", "உங்கள் நிறுத்தம் இன்னும் தொடர்கிறது."]
+    ["Your Pause is still on.", "您的暂停求助仍在进行中。", "Jeda anda masih aktif.", "உங்கள் நிறுத்தம் இன்னும் தொடர்கிறது."],
+    // Volunteer sign-up: the stand-in Singpass step
+    ["A real launch sends you to Singpass to confirm who you are. This demo can’t connect to Singpass, so it stands in for it.", "正式推出时，系统会带您到 Singpass 确认身份。这个演示版无法连接 Singpass，所以用这一步代替。", "Apabila dilancarkan sepenuhnya, anda akan dibawa ke Singpass untuk mengesahkan identiti anda. Demo ini tidak dapat bersambung ke Singpass, jadi langkah ini menggantikannya.", "முழுமையாக அறிமுகமானதும், உங்கள் அடையாளத்தை உறுதிப்படுத்த Singpass க்கு அனுப்பப்படுவீர்கள். இந்த டெமோ Singpass உடன் இணைக்க முடியாது, எனவே இந்தப் படி அதற்குப் பதிலாக உள்ளது."],
+    ["Allow", "允许", "Benarkan", "அனுமதி"],
+    ["Continue as (demo identity)", "以此身份继续（演示身份）", "Teruskan sebagai (identiti demo)", "இவ்வாறு தொடரவும் (டெமோ அடையாளம்)"],
+    ["In a real launch you would scan a QR code with the Singpass app here. Kampung Watch never asks for your Singpass password.", "正式推出时，您会在这里用 Singpass 应用程序扫描二维码。Kampung Watch 绝不会向您索取 Singpass 密码。", "Apabila dilancarkan sepenuhnya, anda akan mengimbas kod QR dengan aplikasi Singpass di sini. Kampung Watch tidak akan sekali-kali meminta kata laluan Singpass anda.", "முழுமையாக அறிமுகமானதும், இங்கே Singpass செயலியால் QR குறியீட்டை ஸ்கேன் செய்வீர்கள். Kampung Watch உங்கள் Singpass கடவுச்சொல்லை ஒருபோதும் கேட்காது."],
+    ["Kampung Watch is asking for your name", "Kampung Watch 请求获取您的名字", "Kampung Watch meminta nama anda", "Kampung Watch உங்கள் பெயரைக் கேட்கிறது"],
+    ["Singpass · demo", "Singpass · 演示", "Singpass · demo", "Singpass · டெமோ"],
+    ["So residents know who is helping them. Nothing else is shared.", "让居民知道是谁在帮助他们。不会分享其他资料。", "Supaya penduduk tahu siapa yang membantu mereka. Tiada maklumat lain dikongsi.", "யார் உதவுகிறார்கள் என்று குடியிருப்பாளர்கள் அறிவதற்காக. வேறு எதுவும் பகிரப்படாது."],
+    ["Verify with Singpass", "通过 Singpass 验证", "Sahkan dengan Singpass", "Singpass மூலம் சரிபார்க்கவும்"],
+    ["Choose a verification method", "选择验证方式", "Pilih cara pengesahan", "சரிபார்க்கும் முறையைத் தேர்ந்தெடுக்கவும்"],
+    ["Demo", "演示", "Demo", "டெமோ"],
+    ["Demo of a Singpass step. Not connected to Singpass. Kampung Watch never asks for your Singpass password.", "这是 Singpass 步骤的演示，并未连接 Singpass。Kampung Watch 绝不会向您索取 Singpass 密码。", "Demo langkah Singpass. Tidak bersambung ke Singpass. Kampung Watch tidak akan sekali-kali meminta kata laluan Singpass anda.", "இது Singpass படியின் டெமோ. Singpass உடன் இணைக்கப்படவில்லை. Kampung Watch உங்கள் Singpass கடவுச்சொல்லை ஒருபோதும் கேட்காது."],
+    ["Name", "名字", "Nama", "பெயர்"],
+    ["Not available in demo", "演示版不提供", "Tiada dalam demo", "டெமோவில் இல்லை"],
+    ["Not connected in this demo. Tap to continue.", "这个演示版没有连接。点击继续。", "Tidak bersambung dalam demo ini. Ketik untuk teruskan.", "இந்த டெமோவில் இணைக்கப்படவில்லை. தொடர தட்டவும்."],
+    ["Not me", "不是我", "Bukan saya", "நான் இல்லை"],
+    ["Scan with the Singpass app", "用 Singpass 应用程序扫描", "Imbas dengan aplikasi Singpass", "Singpass செயலியால் ஸ்கேன் செய்யவும்"],
+    ["Use passkey", "使用通行密钥", "Guna kunci laluan", "கடவுச்சாவியைப் பயன்படுத்தவும்"],
+    ["Use password", "使用密码", "Guna kata laluan", "கடவுச்சொல்லைப் பயன்படுத்தவும்"],
+    ["Verify as", "验证身份为", "Sahkan sebagai", "இவராகச் சரிபார்க்கவும்"],
+    ["You are verifying for", "您正在为以下服务验证身份", "Anda sedang mengesahkan untuk", "நீங்கள் இதற்காகச் சரிபார்க்கிறீர்கள்"]
   ];
   KW.I18N = { zh: {}, ms: {}, ta: {} };
   rows.forEach(([en, zh, ms, ta]) => { KW.I18N.zh[en] = zh; KW.I18N.ms[en] = ms; KW.I18N.ta[en] = ta; });

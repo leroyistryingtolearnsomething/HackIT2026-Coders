@@ -477,6 +477,141 @@
     router();
   }
 
+  /* ---------- the stand-in Singpass step ----------
+     Laid out like the real Singpass screen (who you're verifying for, a QR code, passkey and
+     password), so the demo shows how a real launch would feel. It is deliberately not a copy:
+     no Singpass or government branding, a fake QR, and nothing asks for a password. A real
+     launch sends people to Singpass itself. The identity is one of KW.DEMO_IDENTITIES. */
+  let spDemo = null;
+
+  /* A QR-looking grid of squares: three corner markers and seeded noise, not a real code. */
+  function fakeQR(seed) {
+    const n = 25, cell = 8, rects = [];
+    let x = seed * 9301 + 49297;
+    const rand = () => { x = (x * 9301 + 49297) % 233280; return x / 233280; };
+    const inFinder = (r, c) => [[0, 0], [0, n - 7], [n - 7, 0]].some(([fr, fc]) => r >= fr && r < fr + 7 && c >= fc && c < fc + 7);
+    const finder = (fr, fc) => {
+      const X = fc * cell, Y = fr * cell, S = 7 * cell, I = 5 * cell;
+      rects.push(`<path fill-rule="evenodd" d="M${X} ${Y}h${S}v${S}h-${S}Z M${X + cell} ${Y + cell}v${I}h${I}v-${I}Z" />`);
+      rects.push(`<rect x="${X + 2 * cell}" y="${Y + 2 * cell}" width="${3 * cell}" height="${3 * cell}" rx="2" />`);
+    };
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+      if (inFinder(r, c) || (r > 8 && r < 16 && c > 8 && c < 16)) continue; // corners and the centre badge
+      if (rand() > 0.52) rects.push(`<rect x="${c * cell}" y="${r * cell}" width="${cell}" height="${cell}" rx="1.5" />`);
+    }
+    finder(0, 0); finder(0, n - 7); finder(n - 7, 0);
+    return `<svg class="sp-qr-art" viewBox="0 0 ${n * cell} ${n * cell}" aria-hidden="true" focusable="false"><g fill="currentColor">${rects.join('')}</g></svg>`;
+  }
+
+  const spIcon = {
+    key: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="4.5"/><path d="m11.2 11.2 9 9M16.5 16.5l2-2M18.8 18.8l2-2"/></svg>',
+    dots: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/></svg>',
+    logo: '<svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="7" fill="var(--color-accent-2-700)"/><path d="M5 15.5 16 6.5l11 9M8.5 13v12.5h15V13" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="m12 19.5 3 3 5.5-6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  };
+
+  function openSingpassDemo(returnTo) {
+    if (spDemo) return;
+    let who = 0;
+    const el = document.createElement('div');
+    el.className = 'sp-screen';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-labelledby', 'spHeading');
+    document.body.appendChild(el);
+    document.body.classList.add('modal-open');
+
+    const close = () => {
+      document.removeEventListener('keydown', onKey, true);
+      el.remove();
+      spDemo = null;
+      if (!$('#modal').hidden) return; // the volunteer dialog is still open underneath
+      document.body.classList.remove('modal-open');
+    };
+    const cancel = () => { close(); if (returnTo && returnTo.isConnected) returnTo.focus(); };
+    // Caught on the way down, so Escape backs out of this step only, not the dialog underneath.
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); cancel(); } };
+    document.addEventListener('keydown', onKey, true);
+
+    const banner = `<p class="sp-banner">${tx('Demo of a Singpass step. Not connected to Singpass. Kampung Watch never asks for your Singpass password.')}</p>`;
+    const whoCard = () => {
+      const p = KW.DEMO_IDENTITIES[who];
+      return `
+        <div class="sp-who">
+          <span class="duty-avatar" aria-hidden="true">${esc(initials(p.name))}</span>
+          <span class="sp-who-text"><span class="sp-who-label">${tx('Verify as')}</span><strong class="sp-who-name">${esc(p.name)}</strong></span>
+          <button type="button" class="btn btn-ghost" data-sp="notme">${tx('Not me')}</button>
+        </div>`;
+    };
+    const app = `
+      <div class="sp-app">
+        <span class="sp-app-logo">${spIcon.logo}</span>
+        <p class="sp-app-label">${tx('You are verifying for')}</p>
+        <h2 class="sp-app-name" id="spHeading" tabindex="-1">Kampung Watch</h2>
+      </div>`;
+
+    const drawMethods = () => {
+      el.innerHTML = `${banner}
+        <div class="sp-main">
+          ${whoCard()}
+          <div class="sp-card">
+            ${app}
+            <div class="sp-methods">
+              <h3 class="sp-methods-title">${tx('Choose a verification method')}</h3>
+              <button type="button" class="sp-qr" data-sp="qr">
+                <span class="sp-qr-frame">${fakeQR(who + 3)}<span class="sp-qr-badge">${tx('Demo')}</span></span>
+                <span class="sp-qr-caption">${tx('Scan with the Singpass app')}</span>
+                <span class="sp-qr-hint">${tx('Not connected in this demo. Tap to continue.')}</span>
+              </button>
+              <div class="sp-method" aria-disabled="true">${spIcon.key}<span>${tx('Use passkey')}</span><span class="tag tag-neutral">${tx('Not available in demo')}</span></div>
+              <div class="sp-method" aria-disabled="true">${spIcon.dots}<span>${tx('Use password')}</span><span class="tag tag-neutral">${tx('Not available in demo')}</span></div>
+            </div>
+          </div>
+          <p class="sp-foot"><button type="button" class="btn btn-ghost" data-sp="cancel">${tx('Cancel')}</button></p>
+        </div>`;
+      $('#spHeading', el).focus();
+    };
+
+    const drawConsent = () => {
+      const p = KW.DEMO_IDENTITIES[who];
+      el.innerHTML = `${banner}
+        <div class="sp-main">
+          <div class="sp-card sp-card-single">
+            ${app}
+            <div class="sp-consent">
+              <h3 class="sp-methods-title" id="spConsentTitle" tabindex="-1">${tx('Kampung Watch is asking for your name')}</h3>
+              <dl class="sp-share"><dt>${tx('Name')}</dt><dd>${esc(p.name)}</dd></dl>
+              <p class="muted">${tx('So residents know who is helping them. Nothing else is shared.')}</p>
+              <div class="btn-row">
+                <button type="button" class="btn btn-secondary btn-lg" data-sp="cancel">${tx('Cancel')}</button>
+                <button type="button" class="btn btn-primary btn-lg" data-sp="allow">${tx('Allow')}</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      $('#spConsentTitle', el).focus();
+    };
+
+    el.addEventListener('click', e => {
+      const b = e.target.closest('[data-sp]');
+      if (!b) return;
+      const what = b.dataset.sp;
+      if (what === 'cancel') cancel();
+      else if (what === 'notme') {
+        who = (who + 1) % KW.DEMO_IDENTITIES.length;
+        drawMethods();
+        $('[data-sp="notme"]', el).focus();
+      } else if (what === 'qr') drawConsent();
+      else if (what === 'allow') act(b, async () => {
+        await api.post('/volunteer/verify', { persona: KW.DEMO_IDENTITIES[who].id });
+        close();
+        openVolunteerLogin({ animate: false }); // the dialog redraws with step 1 ticked
+      });
+    });
+
+    spDemo = el;
+    drawMethods();
+  }
+
   /* Becoming a volunteer: confirm who you are (Singpass in a real launch, a demo here),
      pass the Intermediate courses in Learn, then choose a role and area. The server
      checks both steps, so residents know every volunteer is real and trained. */
@@ -499,11 +634,10 @@
           <li class="vol-step ${steps.identity ? 'is-done' : ''}">
             <h3>${tick(steps.identity)}${tx('1. Confirm who you are')}</h3>
             ${steps.identity ? `<p>${th('Confirmed as {name} (Singpass demo).', { name: `<strong>${esc(steps.identity.name)}</strong>` })}</p>` : `
-              <form id="volVerify" class="vol-verify">
-                <p class="muted">${tx('In a real launch this opens Singpass. This prototype can’t connect to Singpass, so type your name as it appears on your NRIC.')}</p>
-                <div class="field"><label for="vName">${tx('Your name')}</label><input id="vName" class="input" required minlength="2" maxlength="40" autocomplete="name"></div>
-                <button type="submit" class="btn btn-secondary">${tx('Verify with Singpass (demo)')}</button>
-              </form>`}
+              <div id="volVerify" class="vol-verify">
+                <p class="muted">${tx('A real launch sends you to Singpass to confirm who you are. This demo can’t connect to Singpass, so it stands in for it.')}</p>
+                <button type="button" class="btn btn-secondary" id="spStart">${tx('Verify with Singpass')}</button>
+              </div>`}
           </li>
           <li class="vol-step ${steps.courses.every(c => c.passed) ? 'is-done' : ''}">
             <h3>${tick(steps.courses.every(c => c.passed))}${tx('2. Pass the Intermediate courses')}</h3>
@@ -530,13 +664,7 @@
       onMount: body => {
         $$('[data-close]', body).forEach(b => b.addEventListener('click', () => closeModal()));
         const verify = $('#volVerify', body);
-        if (verify) verify.addEventListener('submit', e => {
-          e.preventDefault();
-          act(e.submitter, async () => {
-            await api.post('/volunteer/verify', { name: $('#vName', body).value });
-            openVolunteerLogin({ animate: false }); // redraw in place with step 1 ticked
-          });
-        });
+        if (verify) $('#spStart', verify).addEventListener('click', e => openSingpassDemo(e.currentTarget));
         $('#volForm', body).addEventListener('submit', e => {
           e.preventDefault();
           act(e.submitter, async () => {
@@ -558,6 +686,14 @@
     const nav = $('#siteNav');
     const open = nav.classList.toggle('open');
     $('#navToggle').setAttribute('aria-expanded', String(open));
+  });
+  // Escape closes the open menu and puts focus back on its button.
+  document.addEventListener('keydown', e => {
+    const nav = $('#siteNav');
+    if (e.key !== 'Escape' || !nav.classList.contains('open') || !$('#modal').hidden) return;
+    nav.classList.remove('open');
+    $('#navToggle').setAttribute('aria-expanded', 'false');
+    $('#navToggle').focus();
   });
 
   $('#resetLocal').addEventListener('click', () => {
@@ -1305,7 +1441,7 @@
       </div>
       ${past.length ? `
         <div class="pause-history">
-          <h2 class="kicker">${tx('Your recent Pauses')}</h2>
+          <h2 class="pause-who-title">${tx('Your recent Pauses')}</h2>
           <ul class="plain-list" role="list">${past.map(p => `
             <li>${timeAgo(p.created)}
               ${p.outcome ? `<span class="tag ${OUTCOMES[p.outcome][1]}">${tx(OUTCOMES[p.outcome][0])}</span>` : ''}
@@ -1869,7 +2005,7 @@
             ${g.openPause ? helperPauseHTML(g.openPause, { escalate: true })
               : `<p class="muted">${tx('No Pause right now. If {name} presses it, you’ll get an alert on any page of Kampung Watch.', { name: g.name })}</p>`}
             <div class="drill-panel">
-              <h4 class="kicker">${tx('Scam Drill')}</h4>
+              <h4 class="pause-who-title">${tx('Scam Drill')}</h4>
               <p>${tx('Send {name} a safe practice scam. If they press Pause or delete it, they pass. If they fall for it, they get a 30-second lesson and nothing is lost.', { name: g.name })}</p>
               <p class="drill-suggest" data-suggest="${esc(g.town)}" data-for="dt-${id}"></p>
               <div class="inline-form">
@@ -1983,13 +2119,13 @@
               <a class="btn btn-secondary" href="https://wa.me/?text=${encodeURIComponent(share)}" target="_blank" rel="noopener">${tx('Send on WhatsApp')}</a>
               <button type="button" class="btn btn-ghost" id="newCode">${tx('Make a new code')}</button>
             </div>
-            <h3 class="kicker">${tx('In your Circle')}</h3>
+            <h3 class="pause-who-title">${tx('In your Circle')}</h3>
             ${mine.members.length ? `
               <ul class="member-list" role="list">${mine.members.map(m => `
                 <li><span><strong>${esc(m.name)}</strong> <span class="muted">${tx(m.relation)}</span></span>
                   <button type="button" class="btn btn-ghost" data-remove="${m.id}" data-name="${esc(m.name)}">${tx('Remove')}</button></li>`).join('')}
               </ul>` : `<p class="muted">${tx('No one yet. Until someone joins, your Pause alerts go to volunteers.')}</p>`}
-            ${mine.drills.length ? `<h3 class="kicker">${tx('Your practice scams')}</h3>${drillHistory(mine.drills, mine.drillStats)}`
+            ${mine.drills.length ? `<h3 class="pause-who-title">${tx('Your practice scams')}</h3>${drillHistory(mine.drills, mine.drillStats)}`
               : mine.members.length ? `<p class="muted">${tx('People in your Circle can send you a safe practice scam, so the real thing is easier to spot.')}</p>` : ''}
             <details class="cf-more"><summary>${tx('Change your name or town')}</summary>${circleForm(mine)}</details>`
           : `
@@ -2011,7 +2147,7 @@
         <div class="field full"><label for="joinCode">${tx('Their Circle code')}</label><input id="joinCode" class="input circle-code-input" maxlength="9" required autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
         <div class="field"><label for="joinName">${tx('Your name')}</label><input id="joinName" class="input" maxlength="40" required autocomplete="given-name"></div>
         <div class="field"><label for="joinRelation">${tx('You are their')}</label><select id="joinRelation" class="input">${KW.RELATIONS.map(r => `<option value="${esc(r)}">${tx(r)}</option>`).join('')}</select></div>
-        <div class="full form-actions"><button type="submit" class="btn btn-primary">${tx('Join their Circle')}</button></div>
+        <div class="full form-actions"><button type="submit" class="btn btn-secondary">${tx('Join their Circle')}</button></div>
       </form>`;
     return folded ? `
       <details class="cf-more" id="joinBox" ${wasOpen ? 'open' : ''}>
@@ -2226,7 +2362,8 @@
       if (!(kind === 'updated' && ownOpen)) refreshPause();
       if ((kind === 'new' || kind === 'escalated') && !ownOpen) {
         const p = await api.get('/pauses/' + encodeURIComponent(id)).catch(() => null);
-        if (p && kind === 'new' && p.role === 'circle') toast(t('{name} pressed Pause.', { name: p.name }), 'warn');
+        // A resident with no Circle goes straight to volunteers, so they hear about it as 'new' too.
+        if (p && kind === 'new' && (p.role === 'circle' || p.role === 'volunteer')) toast(t('{name} pressed Pause.', { name: p.name }), 'warn');
         if (p && kind === 'escalated' && p.role === 'volunteer') toast(t('{name} needs a volunteer: their Circle didn’t answer in time.', { name: p.name }), 'warn');
       }
       return;
@@ -2407,7 +2544,7 @@
               <div class="field"><label for="subTown">${tx('Your town')}</label><select id="subTown" class="input">${townOptions(sub.town, true, t('Choose your town'))}</select></div>
               ${sub.enabled
                 ? `<button type="button" class="btn btn-secondary" id="subOff">${tx('Turn off')}</button><button type="button" class="btn btn-ghost" id="subTest">${tx('Send a test alert')}</button>`
-                : `<button type="button" class="btn btn-primary" id="subOn">${tx('Alert me')}</button>`}
+                : `<button type="button" class="btn btn-secondary" id="subOn">${tx('Alert me')}</button>`}
             </div>
           </section>
         </header>
@@ -2855,8 +2992,9 @@
   function renderPostList() {
     const list = $('#postList');
     if (!list) return;
+    const q = communityView.q.trim();
     list.innerHTML = cache.posts.length ? cache.posts.map(postItem).join('')
-      : `<div class="empty"><p>${tx('No posts here yet. Be the first to start the conversation.')}</p></div>`;
+      : `<div class="empty"><p>${q ? tx('No posts match “{q}”. Try fewer or different words.', { q }) : tx('No posts here yet. Be the first to start the conversation.')}</p></div>`;
     const update = updated => {
       const i = cache.posts.findIndex(x => x.id === updated.id);
       if (i >= 0) cache.posts[i] = { ...cache.posts[i], ...updated };
@@ -2878,7 +3016,9 @@
     if (navigator.share) {
       navigator.share({ title, text: `Kampung Watch: ${title}`, url }).catch(() => { /* closed the share sheet */ });
     } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(url).then(() => toast(t('Link copied. Paste it into your block’s chat group.'), 'ok'));
+      navigator.clipboard.writeText(url)
+        .then(() => toast(t('Link copied. Paste it into your block’s chat group.'), 'ok'))
+        .catch(() => toast(url)); // copying can be blocked; show the link to copy by hand
     } else {
       toast(url);
     }
@@ -3491,7 +3631,8 @@
       api.post('/learn/quiz', { course: course.id, answers }).catch(() => {});
       const nextCourse = KW.COURSES.find(c => !courseProgress(c.id).passed);
       $('#quizResult').innerHTML = `
-        <p class="game-verdict ${pass ? 'is-right' : 'is-wrong'}">${pass ? tx('You passed, {n} of {total}.', { n: score, total: course.quiz.length }) : tx('{n} of {total}. So close.', { n: score, total: course.quiz.length })}</p>
+        <p class="game-verdict ${pass ? 'is-right' : 'is-wrong'}">${pass ? tx('You passed, {n} of {total}.', { n: score, total: course.quiz.length })
+          : tx(score === passMark(course) - 1 ? '{n} of {total}. So close.' : '{n} of {total}. Not this time.', { n: score, total: course.quiz.length })}</p>
         <p>${pass ? tx('Share what you learned with someone you care about.') : tx('Read the explanations above and try again.')}</p>
         <div class="btn-row">
           ${pass && nextCourse ? `<a class="btn btn-primary btn-lg" href="#/learn/course/${nextCourse.id}">${tx('Next course: {title}', { title: t(nextCourse.title) })}</a>` : ''}

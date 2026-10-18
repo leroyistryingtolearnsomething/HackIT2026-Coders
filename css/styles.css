@@ -237,9 +237,9 @@ body { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-are
 /* On the black header: light text, dark controls with a visible edge. */
 .site-header .input { background: var(--color-bg-inverse-raised); color: var(--color-text-on-inverse); border-color: var(--input-edge); }
 .site-header .btn-ghost, .site-header .site-nav a { color: var(--color-text-on-inverse); }
-@media (hover: hover) and (pointer: fine) { .site-header .btn-ghost:hover, .site-header .site-nav a:hover { color: var(--color-text-on-inverse-strong); background: rgba(255, 255, 255, .08); } }
+@media (hover: hover) and (pointer: fine) { .site-header .btn-ghost:hover, .site-header .nav-toggle:hover, .site-header .site-nav a:hover { color: var(--color-text-on-inverse-strong); background: rgba(255, 255, 255, .08); } }
 .site-header .btn-ghost[aria-pressed='true'] { background: rgba(255, 255, 255, .16); color: var(--color-text-on-inverse-strong); }
-.site-header .nav-toggle { color: var(--color-text-on-inverse); border-color: var(--input-edge); border-radius: var(--radius-md); padding-inline: var(--space-4); }
+.site-header .nav-toggle { color: var(--color-text-on-inverse); border-color: var(--input-edge);border-radius: var(--radius-md); padding-inline: var(--space-4); }
 .site-header :focus-visible { outline-color: var(--action-on-dark); }
 .nav-town { font-weight: 400; color: var(--color-text-on-inverse-muted); }
 .site-bar .nav-brand { color: var(--color-text-on-inverse); text-decoration: none; font-size: 1.125rem; min-height: 44px; display: inline-flex; align-items: center; gap: var(--space-2); }
@@ -281,7 +281,7 @@ main { outline: none; }
 .helpline-list a { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 1.25rem; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; align-self: flex-start; }
 @media (hover: hover) and (pointer: fine) { .helpline-list a:hover { text-decoration: underline; } }
 
-.toasts { position: fixed; left: 50%; bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: var(--space-2); width: min(560px, calc(100% - 2 * var(--space-4))); pointer-events: none; }
+.toasts { position: fixed; left: 50%; bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 400; /* above the countdown (300) and the Singpass step (320), so errors there are seen */ display: flex; flex-direction: column; gap: var(--space-2); width: min(560px, calc(100% - 2 * var(--space-4))); pointer-events: none; }
 .toast {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
   padding: var(--space-3) var(--space-4); border-radius: 14px; box-shadow: var(--shadow-lg);
@@ -292,6 +292,7 @@ main { outline: none; }
 .toast.leaving { transition-duration: 150ms; } /* the system responding: faster out than in */
 .toast a { color: var(--action-on-dark); font-weight: 600; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; }
 .toast-warn { background: var(--color-accent-2-800); }
+.toast-warn a { color: var(--color-text-on-inverse); text-decoration: underline; } /* blue on chili measures 3.7:1; this is 10.1:1 */
 
 /* Dialogs (Broadsheet .dialog-backdrop / .dialog) */
 .modal[hidden] { display: none; }
@@ -323,6 +324,7 @@ main { outline: none; }
 .vol-step.is-done .vol-step-mark { background: var(--color-accent-700); border-color: var(--color-accent-700); color: #fff; }
 .vol-verify { display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-start; }
 .vol-verify .field { width: 100%; }
+
 .vol-step p { margin: 0; }
 .vol-courses { list-style: none; margin: 0; padding: 0; }
 .vol-courses li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; }
@@ -812,7 +814,8 @@ body.route-ask .fab { display: none; }
 .pause-page .pause-start .pause-team { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: var(--space-3) var(--space-6); }
 .pause-page .pause-history { text-align: center; }
 .pause-page.is-live .page-head, .pause-page.is-ended .page-head,
-.pause-page.is-live #circleZone, .pause-page.is-live #installZone, .pause-page.is-live #impactZone { display: none; } /* once it's on, the live Pause is the whole page */
+.pause-page.is-live #circleZone, .pause-page.is-live #installZone, .pause-page.is-live #impactZone,
+.pause-page.is-ended #circleZone, .pause-page.is-ended #installZone, .pause-page.is-ended #impactZone { display: none; } /* once it's on, the live Pause is the whole page */
 .pause-page .pause-history .plain-list li { justify-content: center; }
 
 .pause-start { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--gap-xl); align-items: center; }
@@ -825,7 +828,7 @@ body.route-ask .fab { display: none; }
 }
 @media (hover: hover) and (pointer: fine) { .pause-btn:hover { background: var(--color-accent-2-800); } }
 .pause-btn { transition: transform 160ms var(--ease-out), background-color 160ms ease; }
-.pause-btn:active { transform: scale(.97); }
+.pause-btn:active { transform: scale(0.95); } /* the same press as every other button */
 .pause-btn:focus-visible { outline: 3px solid var(--color-text); outline-offset: 1rem; }
 .pause-btn:disabled { cursor: progress; opacity: .75; }
 .pause-btn-word { font-size: 3.75rem; line-height: 1; font-weight: var(--font-heading-weight); letter-spacing: -.02em; }
@@ -910,7 +913,7 @@ body.route-ask .fab { display: none; }
   display: flex; align-items: center; gap: var(--space-3); text-align: left;
   font-family: inherit; font-size: 1.0625rem; line-height: 1.5rem; cursor: pointer;
   color: var(--color-text); background: var(--color-bg);
-  border: 1px solid var(--color-neutral-500); border-radius: var(--radius-md);
+  border: 1px solid var(--input-edge); border-radius: var(--radius-md); /* 3:1 edge, like a field */
 }
 .sign-btn::before { content: ''; flex: none; width: 1.25rem; height: 1.25rem; border: 2px solid var(--ink-70); border-radius: var(--radius-sm); }
 .sign-btn[aria-pressed='true'] { border-color: var(--color-accent-2-700); background: var(--color-accent-2-100); color: var(--color-accent-2-900); }
@@ -1257,3 +1260,68 @@ html:lang(zh) body, html:lang(ta) body { letter-spacing: 0; }
   .site-bar .nav-brand > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
   .site-bar .nav-brand { margin-right: auto; }
 }
+
+/* Learn's level filter wraps on phones; wrapped options read better as separate chips than
+   as one track broken over two rows. */
+@media (max-width: 720px) {
+  .lr-levels { border: 0; padding: 0; gap: var(--space-1); }
+  .lr-levels .seg-opt { border: 1px solid var(--color-divider); flex: 0 1 auto; }
+  .lr-levels .seg-opt:has(input:checked) { border-color: var(--action); }
+}
+
+/* ---------- The stand-in Singpass step (volunteer sign-up) ----------
+   Shaped like the real Singpass screen: who you're verifying as, the service, a QR code and
+   the other methods. Kampung Watch's own colours and type, and a demo banner on top. */
+.sp-screen { position: fixed; inset: 0; z-index: 320; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; background: var(--color-surface); color: var(--color-text); }
+.sp-banner { margin: 0; padding: calc(var(--space-2) + env(safe-area-inset-top, 0px)) var(--space-4) var(--space-2); background: var(--color-bg-inverse); color: var(--color-text-on-inverse); font-size: 1rem; line-height: 1.5rem; text-align: center; }
+.sp-main { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: var(--space-4); padding: var(--space-8) var(--space-4) calc(var(--space-8) + env(safe-area-inset-bottom, 0px)); }
+.sp-who { display: flex; align-items: center; gap: var(--space-3); width: min(26rem, 100%); padding: var(--space-3) var(--space-4); background: var(--color-bg); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); }
+.sp-who-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sp-who-label { font-size: 1rem; line-height: 1.375rem; color: var(--ink-78); }
+.sp-who-name { font-size: 1.125rem; line-height: 1.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-card { width: min(60rem, 100%); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-8); padding: var(--space-8); background: var(--color-bg); border-radius: 24px; }
+.sp-card-single { width: min(40rem, 100%); grid-template-columns: minmax(0, 1fr); }
+.sp-app { display: flex; flex-direction: column; gap: var(--space-1); }
+.sp-app p { margin: 0; }
+.sp-app-logo { width: 3.5rem; height: 3.5rem; padding: .375rem; margin-bottom: var(--space-3); border-radius: 14px; box-shadow: 0 0 0 1px var(--color-divider); }
+.sp-app-logo svg { width: 100%; height: 100%; display: block; }
+.sp-app-label { font-size: 1.0625rem; color: var(--ink-78); }
+.sp-app-name { margin: 0; font-size: 1.75rem; line-height: 2.25rem; }
+.sp-app-name:focus, .sp-methods-title:focus { outline: none; }
+.sp-methods, .sp-consent { display: flex; flex-direction: column; gap: var(--space-3); }
+.sp-methods-title { margin: 0 0 var(--space-1); font-size: 1.125rem; line-height: 1.625rem; font-weight: 600; }
+.sp-qr {
+  align-self: center; width: min(16rem, 100%); display: grid; justify-items: center; gap: var(--space-1);
+  padding: var(--space-4); position: relative; cursor: pointer; font: inherit; color: var(--color-text);
+  background: var(--color-bg); border: 2px solid var(--color-text); border-radius: 18px;
+}
+@media (hover: hover) and (pointer: fine) { .sp-qr:hover { border-color: var(--action); } }
+.sp-qr:active { transform: scale(0.98); }
+.sp-qr-art { width: 100%; height: auto; color: var(--color-text); }
+.sp-qr-frame { position: relative; width: 100%; display: grid; place-items: center; }
+.sp-qr-frame > * { grid-area: 1 / 1; }
+.sp-qr-badge {
+  padding: .25rem .625rem; border-radius: var(--radius-pill); background: var(--color-kaya-100); color: var(--color-kaya-800);
+  font-weight: 600; font-size: 1rem; line-height: 1.5rem; box-shadow: 0 0 0 4px var(--color-bg);
+}
+.sp-qr-caption { font-weight: 600; margin-top: var(--space-2); }
+.sp-qr-hint { font-size: 1rem; line-height: 1.375rem; color: var(--ink-78); text-align: center; }
+.sp-method { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); min-height: 4rem; padding: var(--space-2) var(--space-6); background: var(--color-surface); border-radius: var(--radius-md); color: var(--ink-70); font-weight: 600; }
+.sp-method svg { flex: none; }
+.sp-method .tag { font-weight: 400; }
+.sp-share { margin: 0; padding: var(--space-3) var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); }
+.sp-share dt { font-size: 1rem; color: var(--ink-78); }
+.sp-share dd { margin: 0; font-size: 1.25rem; line-height: 1.75rem; font-weight: 600; }
+.sp-consent p { margin: 0; }
+.sp-foot { margin: 0; }
+/* Desktop: the "Verify as" card sits top-right, as on the real screen. */
+@media (min-width: 900px) {
+  .sp-who { position: absolute; top: var(--space-6); right: var(--space-6); width: 24rem; }
+  .sp-main { padding-top: calc(var(--space-8) * 3); }
+}
+@media (max-width: 720px) {
+  .sp-card { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); padding: var(--space-6) var(--space-4); border-radius: 18px; }
+  .sp-main { padding-top: var(--space-4); }
+  .sp-method { padding-inline: var(--space-4); }
+}
+@media (prefers-reduced-motion: reduce) { .sp-qr:active { transform: none; } }

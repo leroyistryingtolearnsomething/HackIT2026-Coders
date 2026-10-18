@@ -5,8 +5,8 @@ export const INTERMEDIATE = KW.COURSES.filter(c => c.level === 'Intermediate');
 
 /* Takes a resident through the volunteer steps (demo identity check, then the Intermediate
    quizzes answered correctly) and signs them in. `call` is the test file's request helper. */
-export async function becomeVolunteer(call, { name = 'Mei', client } = {}) {
-  await call('POST', '/volunteer/verify', { body: { name }, client });
+export async function becomeVolunteer(call, { persona = 'tan-wei-jie', client } = {}) {
+  await call('POST', '/volunteer/verify', { body: { persona }, client });
   for (const c of INTERMEDIATE) {
     await call('POST', '/learn/quiz', { body: { course: c.id, answers: c.quiz.map(q => q.answer) }, client });
   }
