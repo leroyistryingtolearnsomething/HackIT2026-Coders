@@ -184,7 +184,7 @@
     if (res.ok && window.KW_DEV) data = window.KW_DEV.shape(method, path, data);
     if (!res.ok) {
       if (res.status === 401 && prefs.volunteer && path !== '/volunteer/login') endVolunteerSession('Your volunteer session has expired. Please sign in again.');
-      throw new ApiError((data && data.error) || `Request failed (${res.status})`);
+      throw new ApiError(t((data && data.error) || 'Something went wrong. Please try again in a moment.')); // server messages are English; t() finds the reader's language
     }
     return data;
   }
@@ -925,7 +925,10 @@
             <form class="cf-input" id="askForm" novalidate>
               <div class="field">
                 <label for="askText" data-i18n="pasteLabel"></label>
-                <textarea id="askText" class="input" rows="5" maxlength="4000" data-i18n-placeholder="placeholder"></textarea>
+                <div class="ask-box">
+                  <div class="input ask-marks" id="askMarks" aria-hidden="true"></div>
+                  <textarea id="askText" class="input" rows="5" maxlength="4000" data-i18n-placeholder="placeholder"></textarea>
+                </div>
               </div>
               <input type="file" id="askImg" class="sr-only" accept="${SCREENSHOT_TYPES.join(',')}" tabindex="-1" aria-hidden="true">
               <div class="cf-actions">
@@ -994,23 +997,48 @@
     const text = $('#askText');
     let shownCheck = null;
 
+    /* Red flags light up inside the message itself: #askMarks holds a copy of the text, laid out
+       exactly like the box and sitting behind it, with each risky phrase in a <mark>. */
+    const marks = $('#askMarks');
+    const firstMatch = (f, value) => (value.match(f.re) || [''])[0];
+    function flagRanges(value) {
+      const found = [];
+      for (const f of KW.FLAG_RULES) {
+        for (const m of value.matchAll(new RegExp(f.re.source, f.re.flags.replace('g', '') + 'g'))) if (m[0]) found.push([m.index, m.index + m[0].length]);
+      }
+      found.sort((a, b) => a[0] - b[0]);
+      const merged = []; // overlapping phrases ("bank account") are marked once
+      for (const r of found) { const last = merged[merged.length - 1]; if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]); else merged.push(r); }
+      return merged;
+    }
+    function drawMarks(value) {
+      let html = '', at = 0;
+      for (const [a, b] of flagRanges(value)) { html += esc(value.slice(at, a)) + '<mark>' + esc(value.slice(a, b)) + '</mark>'; at = b; }
+      marks.innerHTML = html + esc(value.slice(at)) + ' '; // the space keeps a final empty line as tall as the box's
+      marks.scrollTop = text.scrollTop;
+    }
+    text.addEventListener('scroll', () => { marks.scrollTop = text.scrollTop; });
+
     // Re-draws only when the result changes, so screen readers hear each new verdict once.
     function updateCheck(force = false) {
       const value = text.value;
+      drawMarks(value);
       const flags = value.trim() ? analyse(value).flags : [];
-      const key = prefs.lang + '|' + (value.trim() ? flags.map(f => f.id).join(',') : '-');
+      const key = prefs.lang + '|' + (value.trim() ? flags.map(f => f.id + ':' + firstMatch(f, value).toLowerCase()).join(',') : '-');
       if (key === shownCheck && !force) return;
       shownCheck = key;
       // Red only once there's something to warn about; the empty prompt and "no red flags" stay ink.
       $('#askVerdict').dataset.level = !value.trim() ? 'empty' : flags.length ? 'flags' : 'clear';
-      $('#askVerdict').textContent = !value.trim() ? say('vEmpty')
+      const verdict = !value.trim() ? say('vEmpty')
         : flags.length === 0 ? say('vNone')
         : flags.length === 1 ? say('vOne')
         : say('vMany', flags.length);
+      // A new quoted phrase alone redraws the list, not the verdict, so it isn't read out again.
+      if ($('#askVerdict').textContent !== verdict || force) $('#askVerdict').textContent = verdict;
       $('#askFlagList').innerHTML = flags.map((f, i) => `
         <li>
           <span class="cf-flag-n">${i + 1}</span>
-          <span class="cf-flag-label">${tx(f.label)}</span>
+          <span class="cf-flag-label">${tx(f.label)}<span class="cf-flag-quote">“${esc(firstMatch(f, value))}”</span></span>
           <span class="cf-flag-tip">${tx(f.tip)}</span>
         </li>`).join('');
     }
@@ -1785,6 +1813,29 @@
   /* The 5-second countdown before an alert goes out, so a mis-tap can be cancelled. */
   let launch = null;
 
+  /* Pause morphs instead of jumping: one shape carries the eye from the button to the countdown,
+     and on to the live screen (or back to the button on Cancel), so a frightened person never
+     loses their place. View Transitions where the browser has them and motion is welcome;
+     otherwise the screen simply switches, as before. */
+  const canMorph = () => !!document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function morph(from, update, to) {
+    if (!canMorph() || !from) return Promise.resolve(update());
+    from.style.viewTransitionName = 'pause-morph';
+    let target = null, ran = null;
+    const run = () => ran || (ran = (async () => {
+      from.style.viewTransitionName = '';
+      await update();
+      target = to();
+      if (target) target.style.viewTransitionName = 'pause-morph';
+    })());
+    const vt = document.startViewTransition(run);
+    // The browser runs the update at its next frame; if none comes soon, skip the motion and update now.
+    setTimeout(() => { if (!ran) { vt.skipTransition(); run(); } }, 300);
+    vt.finished.finally(() => { if (target) target.style.viewTransitionName = ''; });
+    return vt.updateCallbackDone.catch(() => {}).then(run);
+  }
+  const pauseButton = () => $('#pauseBtn') || $('#sosBtn');
+
   function cancelLaunch() {
     if (!launch) return;
     clearInterval(launch.timer);
@@ -1820,11 +1871,20 @@
           <button type="button" class="btn btn-secondary btn-lg" id="launchCancel">${tx('Cancel, I tapped by mistake')}</button>
         </div>
       </div>`;
-    document.body.appendChild(el);
-    document.body.classList.add('modal-open');
-
     let left = 5;
-    const go = () => { cancelLaunch(); send(); };
+    const go = () => {
+      if (!launch || launch.sending) return;
+      // Sending can't be cancelled or sent twice while the alert goes out.
+      launch.sending = true;
+      clearInterval(launch.timer);
+      document.removeEventListener('keydown', launch.onKey);
+      $$('button', el).forEach(b => { b.disabled = true; });
+      const sending = send(); // the alert goes out now, whatever the animation does
+      // The box flows into the live screen if the answer is quick; otherwise it simply closes.
+      morph($('.launch-box', el), async () => { cancelLaunch(); await Promise.race([sending, new Promise(r => setTimeout(r, 1500))]); },
+        () => $('.pause-live-main, .sos-page .pause-headline, .pause-alertbox'));
+    };
+    const cancel = () => morph($('.launch-box', el), cancelLaunch, pauseButton);
     launch = {
       el,
       timer: setInterval(() => {
@@ -1835,16 +1895,21 @@
           $('#launchLive').textContent = String(left); // the digits alone aren't announced
         }
       }, 1000),
-      onKey: e => { if (e.key === 'Escape') cancelLaunch(); }
+      onKey: e => { if (e.key === 'Escape') cancel().then(() => { if (onCancel) onCancel(); }); } // focus back on the button, as Cancel does
     };
     document.addEventListener('keydown', launch.onKey);
-    $('#launchNow').addEventListener('click', go);
-    $('#launchCancel').addEventListener('click', () => {
-      cancelLaunch();
+    // The box joins the page inside the morph, so its buttons are found within it.
+    $('#launchNow', el).addEventListener('click', go);
+    $('#launchCancel', el).addEventListener('click', async () => {
+      await cancel();
       toast(t('Cancelled. Nothing was sent.'));
       if (onCancel) onCancel();
     });
-    $('#launchCancel').focus(); // the safe choice gets the focus
+    morph(pauseButton(), () => {
+      document.body.appendChild(el);
+      document.body.classList.add('modal-open');
+      $('#launchCancel', el).focus(); // the safe choice gets the focus
+    }, () => $('.launch-box', el));
   }
 
   function startLaunch() {
@@ -2460,8 +2525,13 @@
      SCAM RADAR
      ========================================================= */
   const radarFilter = { town: '', type: '', days: 30, verifiedOnly: false };
+  // Phones fold the filters away, except when one is on, so a filtered list never looks like the full one.
+  const filtersOpen = () => !radarPhone()
+    || !!(radarFilter.town || radarFilter.type || radarFilter.days !== 30 || radarFilter.verifiedOnly);
   /* The feed shows reports a page at a time; a long description shows 3 lines until opened. */
   const RADAR_PAGE = 30;
+  const radarPhone = () => matchMedia('(max-width: 720px)').matches;
+  const radarStep = () => (radarPhone() ? 5 : RADAR_PAGE); // phones: five reports at a time
   let radarShown = RADAR_PAGE;
   const radarOpen = new Set(); // ids of reports whose full description is showing
 
@@ -2526,18 +2596,19 @@
 
   function drawRadarPage() {
     if (map) { map.remove(); map = null; markerLayer = null; }
-    radarShown = RADAR_PAGE;
+    radarShown = radarStep();
     const sub = prefs.subscription;
     const [line1, line2] = radarHeadline();
     const newest = [...cache.reports].sort(byNewest)[0];
     main.innerHTML = `
       <div class="page radar">
-        <header class="page-head">
-          <div>
-            <p class="kicker">${tx('Scam Radar')}${newest ? ` · ${tx('latest report {when}', { when: timeAgo(newest.created) })}` : ''}</p>
-            <h1 class="display"><span class="line">${esc(line1)}</span> <span class="line">${esc(line2)}</span></h1>
-          </div>
-          <section class="head-side" aria-labelledby="alertTitle">
+        <header class="radar-hero">
+          <h1 class="display"><span class="line">${esc(line1)}</span> <span class="line">${esc(line2)}</span></h1>
+          ${newest ? `<p class="radar-fresh">${tx('Latest report {when}', { when: timeAgo(newest.created) })}</p>` : ''}
+          <section class="stat-row" id="radarStats" aria-label="${tx('Summary of the reports shown')}"></section>
+        </header>
+
+        <section class="head-side radar-alerts" aria-labelledby="alertTitle">
             <h2 class="kicker" id="alertTitle">${tx('Alerts for your town')}</h2>
             <p>${sub.enabled
               ? th('Alerts are on for {town}. You’ll hear the moment volunteers verify a new scam wave there.', { town: `<strong>${esc(placeName(sub.town))}</strong>` })
@@ -2548,10 +2619,7 @@
                 ? `<button type="button" class="btn btn-secondary" id="subOff">${tx('Turn off')}</button><button type="button" class="btn btn-ghost" id="subTest">${tx('Send a test alert')}</button>`
                 : `<button type="button" class="btn btn-secondary" id="subOn">${tx('Alert me')}</button>`}
             </div>
-          </section>
-        </header>
-
-        <section class="stat-row" id="radarStats" aria-label="${tx('Summary of the reports shown')}"></section>
+        </section>
 
         <figure class="map-figure">
           <div id="map" role="region" aria-label="${tx('Map of scam reports in Singapore')}"></div>
@@ -2567,6 +2635,8 @@
             <h2 class="section-title" id="feedTitle">${tx('Reports')}</h2>
             <button type="button" class="btn btn-primary btn-lg" id="reportBtn">${tx('Report a scam')}</button>
           </div>
+          <details class="cf-more filter-box" id="fBox" ${filtersOpen() ? 'open' : ''}>
+          <summary>${tx('Filter reports')}</summary>
           <div class="filters" role="search" aria-label="${tx('Filter reports')}">
             <div class="field"><label for="fTown">${tx('Town')}</label><select id="fTown" class="input">${townOptions(radarFilter.town, true, t('All towns'))}</select></div>
             <div class="field"><label for="fType">${tx('Scam type')}</label><select id="fType" class="input"><option value="">${tx('All types')}</option>${KW.SCAM_TYPES.map(ty => `<option value="${esc(ty)}" ${ty === radarFilter.type ? 'selected' : ''}>${tx(ty)}</option>`).join('')}</select></div>
@@ -2578,6 +2648,7 @@
             </select></div>
             <label class="check"><input type="checkbox" id="fVerified" ${radarFilter.verifiedOnly ? 'checked' : ''}> ${tx('Verified only')}</label>
           </div>
+          </details>
           ${writtenNote()}
           <div id="radarFeed" aria-live="polite"></div>
         </section>
@@ -2614,7 +2685,7 @@
 
     const bind = (id, key, cast) => $(id).addEventListener('change', e => {
       radarFilter[key] = cast(e.target);
-      radarShown = RADAR_PAGE;
+      radarShown = radarStep();
       updateRadar();
     });
     bind('#fTown', 'town', el => el.value);
@@ -2660,7 +2731,7 @@
       feed.innerHTML = `<div class="empty"><p>${tx('No reports match these filters.')}</p><button type="button" class="btn btn-secondary" id="clearFilters">${tx('Clear filters')}</button></div>`;
       $('#clearFilters').addEventListener('click', () => {
         Object.assign(radarFilter, { town: '', type: '', days: 30, verifiedOnly: false });
-        radarShown = RADAR_PAGE;
+        radarShown = radarStep();
         drawRadarPage();
       });
       return;
@@ -2697,13 +2768,13 @@
       ${reports.length > radarShown ? `
         <div class="radar-more">
           <p class="muted">${tx('Showing {n} of {total} reports', { n: radarShown, total: reports.length })}</p>
-          <button type="button" class="btn btn-secondary" id="radarMore">${tx('Show {n} more', { n: Math.min(RADAR_PAGE, reports.length - radarShown) })}</button>
+          <button type="button" class="btn btn-secondary" id="radarMore">${tx('Show {n} more', { n: Math.min(radarStep(), reports.length - radarShown) })}</button>
         </div>` : ''}`;
 
     const moreBtn = $('#radarMore');
     if (moreBtn) moreBtn.addEventListener('click', () => {
       const first = radarShown;
-      radarShown += RADAR_PAGE;
+      radarShown += radarStep();
       renderRadarFeed(reports);
       // Keep the reader's place: move focus to the first newly shown report.
       const row = $$('.radar-table tbody tr', feed)[first];
@@ -2768,7 +2839,8 @@
       if (btn) btn.addEventListener('click', () => {
         radarFilter.town = btn.dataset.town;
         $('#fTown').value = radarFilter.town;
-        radarShown = RADAR_PAGE;
+        $('#fBox').open = true; // show which town the list is now filtered to
+        radarShown = radarStep();
         map.closePopup();
         updateRadar();
         $('#feedTitle').scrollIntoView({ behavior: 'smooth' });
@@ -3832,7 +3904,7 @@
     }
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      throw new ApiError((data && data.error) || say('aiError'));
+      throw new ApiError(data && data.error ? t(data.error) : say('aiError'));
     }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -3875,7 +3947,7 @@
       await streamAssistant({ lang: prefs.lang, messages: [...history, { role: 'user', content: user.content }], image }, ev => {
         if (ev.type === 'text') { reply.content += ev.text; showProgress(); }
         else if (ev.type === 'refusal') { reply.content += (reply.content ? '\n\n' : '') + ev.text; showProgress(); }
-        else if (ev.type === 'error') { reply.error = true; reply.content = ev.message; }
+        else if (ev.type === 'error') { reply.error = true; reply.content = t(ev.message); }
       });
       if (!reply.content.trim()) { reply.error = true; reply.content = say('aiError'); }
     } catch (err) {

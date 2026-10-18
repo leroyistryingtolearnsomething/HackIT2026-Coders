@@ -410,6 +410,17 @@ body.route-ask .fab { display: none; }
 .cf-input { display: flex; flex-direction: column; gap: .875rem; }
 .cf-input .field > label { font-size: 1.1875rem; margin-bottom: var(--space-2); }
 .check-first textarea.input { font-size: 1.25rem; line-height: 1.875rem; padding: .875rem; min-height: 0; resize: vertical; }
+/* Red flags light up inside the message: the copy behind the box (#askMarks) shares its font, padding
+   and wrapping exactly, shows only the marks, and the box itself is see-through. Both reserve the
+   scrollbar's room so their lines wrap at the same place. */
+.ask-box { position: relative; }
+.check-first .ask-marks { position: absolute; inset: 0; overflow: hidden; pointer-events: none; color: transparent; border-color: transparent;
+  font-size: 1.25rem; line-height: 1.875rem; padding: .875rem; white-space: pre-wrap; overflow-wrap: break-word; scrollbar-gutter: stable;
+  letter-spacing: normal; } /* form fields don't inherit the page's tracking, so the copy mustn't either */
+.ask-box textarea.input { display: block; position: relative; background: transparent; white-space: pre-wrap; overflow-wrap: break-word; scrollbar-gutter: stable; }
+.ask-marks mark { color: transparent; background: var(--color-accent-2-100); border-radius: var(--radius-sm);
+  text-decoration: underline 2px var(--color-accent-2-600); text-underline-offset: 4px; text-decoration-skip-ink: none; }
+.cf-flag-quote { display: block; font-weight: 400; color: var(--color-accent-2-700); overflow-wrap: anywhere; }
 .cf-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .cf-actions { gap: .75rem; }
 .check-first .cf-actions .btn { min-height: 3.25rem; font-size: 1.125rem; padding-inline: 1.375rem; }
@@ -527,11 +538,14 @@ body.route-ask .fab { display: none; }
 @keyframes pulse { 0%, 100% { stroke-opacity: 1; stroke-width: 2; } 50% { stroke-opacity: .3; stroke-width: 10; } }
 
 .filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3) var(--space-4); margin-bottom: var(--space-6); }
+/* The Radar filters fold behind "Filter reports" on phones only (filtersOpen in app.js keeps them open on wider screens). */
+.filter-box { max-width: none; }
+.filter-box > summary { display: none; }
 .filters .field { flex: 1 1 12rem; }
 
 .radar-table { font-size: 1.0625rem; }
-.radar-table th { padding: var(--space-2) var(--space-3) var(--space-2) 0; white-space: nowrap; }
-.radar-table .tag, .r-actions .btn { white-space: nowrap; }
+.radar-table th { padding: var(--space-2) var(--space-3) var(--space-2) 0; } /* headers and tags may wrap: Tamil and Malay labels are far longer */
+.r-actions .btn { white-space: nowrap; }
 .radar-table td { padding: var(--space-4) var(--space-3) var(--space-4) 0; vertical-align: top; }
 @media (hover: hover) and (pointer: fine) { .radar-table tbody tr:hover { background: none; } }
 .radar-table .num { text-align: right; }
@@ -986,6 +1000,11 @@ body.route-ask .fab { display: none; }
 .launch-bar { display: block; height: 6px; border-radius: 999px; overflow: hidden; background: var(--color-accent-2-100); }
 .launch-bar span { display: block; height: 100%; background: var(--color-accent-2-700); transform-origin: left; animation: launch-drain 5s linear forwards; }
 @keyframes launch-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+/* The Pause morph (morph() in app.js): the button, the countdown box and the live panel are one
+   shape changing size, so both pictures fill it while it grows; the rest of the page cross-fades. */
+::view-transition-group(pause-morph) { animation-duration: 420ms; animation-timing-function: var(--ease-out); }
+::view-transition-old(pause-morph), ::view-transition-new(pause-morph) { height: 100%; animation-duration: 420ms; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; }
 .launch-actions { display: flex; flex-direction: column; gap: var(--space-2); }
 .launch-actions .btn { width: 100%; min-height: 3.5rem; font-size: 1.1875rem; white-space: normal; }
 
@@ -1075,7 +1094,14 @@ body.route-ask .fab { display: none; }
   .footer-grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
   #map { height: 320px; }
 
-  /* the report table becomes a stack of entries */
+  .replies { margin-left: var(--space-4); }
+  .ai-msg { max-width: 100%; }
+  .assistant-actions .btn { flex: 1 1 100%; }
+}
+
+/* The report table becomes a stack of entries up to small-laptop width: five columns don't fit
+   below that, least of all with the longer Tamil and Malay labels. */
+@media (max-width: 1024px) {
   .radar-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
   .radar-table, .radar-table tbody, .radar-table tr, .radar-table td { display: block; width: auto; }
   .radar-table tr { padding: var(--space-4) 0; }
@@ -1084,9 +1110,6 @@ body.route-ask .fab { display: none; }
   .radar-table .num { text-align: left; }
   .r-status { flex-direction: row; flex-wrap: wrap; align-items: center; display: inline-flex; }
   .r-actions { flex-direction: row; flex-wrap: wrap; align-items: center; padding-top: var(--space-2) !important; }
-  .replies { margin-left: var(--space-4); }
-  .ai-msg { max-width: 100%; }
-  .assistant-actions .btn { flex: 1 1 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1173,6 +1196,33 @@ html:lang(zh) body, html:lang(ta) body { letter-spacing: 0; }
    surface change instead of rules (Apple's divider). Pause has the dark impact tile;
    Check a message has the full-width neighbours band above. */
 #radarStats { background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-6) clamp(var(--space-4), 3vw, var(--space-8)); }
+/* Radar opens on the same dark tile as Pause's impact numbers: this week's worst scam wave, then the counts.
+   The counts keep the map's hues, one step lighter so they read on the dark tile. */
+.radar-hero { background: var(--color-bg-inverse-raised); color: var(--color-text-on-inverse); border-radius: var(--radius-lg); padding: var(--space-8) clamp(var(--space-4), 5vw, var(--gap-xl)); margin-bottom: var(--space-8); }
+.radar-hero .display { color: var(--color-text-on-inverse-strong); max-width: 20ch; text-wrap: balance; margin: 0; }
+.radar-fresh { margin: var(--space-3) 0 0; color: var(--color-text-on-inverse-muted); }
+.radar-hero #radarStats { background: none; border-radius: 0; margin: var(--space-8) 0 0; padding: var(--space-6) 0 0; border-top: 1px solid rgba(255, 255, 255, .14); }
+.radar-hero .stat-n { color: var(--color-text-on-inverse-strong); }
+.radar-hero .stat-label { color: var(--color-text-on-inverse-muted); }
+.radar-hero .ink-verified { color: var(--color-accent-2-300); }
+.radar-hero .ink-pending { color: var(--color-kaya-200); }
+/* Town alerts: one band under the tile, the words on the left and the form on the right. */
+.radar-alerts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 30rem); column-gap: var(--gap-lg); row-gap: var(--space-2); align-items: end; margin-bottom: var(--gap-lg); }
+.radar-alerts .inline-form { grid-column: 2; grid-row: 1 / span 2; }
+@media (max-width: 960px) {
+  .radar-alerts { grid-template-columns: minmax(0, 1fr); }
+  .radar-alerts .inline-form { grid-column: auto; grid-row: auto; }
+}
+/* Phones: one line per number ("16 reports shown"), so the feed starts sooner. Labels stay at body size. */
+@media (max-width: 720px) {
+  #radarStats { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4); }
+  #radarStats .stat { flex-direction: row; align-items: baseline; gap: var(--space-2); }
+  #radarStats .stat-n { font-size: 1.5rem; line-height: 2rem; flex-shrink: 0; max-width: 60%; } /* a long label wraps, not the number or town */
+  .filter-box > summary { display: inline-flex; }
+  .radar-hero { padding-block: var(--space-6); margin-bottom: var(--space-6); }
+  .radar-hero #radarStats { margin-top: var(--space-6); padding: var(--space-4) 0 0; }
+  .filter-box[open] > summary { margin-bottom: var(--space-3); }
+}
 .cm-side > section { background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-4) var(--space-6) var(--space-6); }
 .cm-side > section .cm-side-title { border-top: 0; padding-top: 0; margin-bottom: var(--space-2); }
 .cm-side-list li { border-bottom-color: var(--color-divider); }

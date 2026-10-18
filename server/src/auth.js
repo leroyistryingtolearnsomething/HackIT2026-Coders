@@ -59,7 +59,7 @@ export function rateLimit({ max, windowMs = 60_000, methods = ['POST', 'PUT', 'P
     const key = req.clientId || req.ip;
     const now = Date.now();
     const times = (hits.get(key) || []).filter(t => now - t < windowMs);
-    if (times.length >= max) return next(new HttpError(429, 'Too many requests — please slow down and try again in a minute.'));
+    if (times.length >= max) return next(new HttpError(429, 'You’re going a bit fast. Please wait a minute, then try again.'));
     times.push(now);
     hits.set(key, times);
     next();

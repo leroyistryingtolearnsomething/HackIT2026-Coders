@@ -73,7 +73,7 @@ export function createApp(overrides = {}) {
     if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Request body is not valid JSON.' });
     const status = err.status || 500;
     if (status >= 500 && !(err instanceof HttpError)) console.error(err); // expected errors aren't crashes
-    res.status(status).json({ error: status >= 500 ? 'Something went wrong on the server.' : err.message });
+    res.status(status).json({ error: status >= 500 ? 'Something went wrong. Please try again in a moment.' : err.message });
   });
   app.use('/api', api);
 

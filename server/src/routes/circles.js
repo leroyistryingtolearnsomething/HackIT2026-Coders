@@ -80,7 +80,7 @@ export default function circlesRouter({ db, hub }) {
   r.post('/join', rateLimit({ max: 10 }), (req, res) => {
     const b = req.body || {};
     const code = normaliseCode(b.code);
-    if (code.length !== 6) throw badRequest('The Circle code has 6 letters and numbers');
+    if (code.length !== 6) throw badRequest('A Circle code has 6 letters and numbers. Check the code and try again.');
     const circle = db.prepare('SELECT * FROM circles WHERE invite_code = ?').get(code);
     if (!circle) throw new HttpError(404, 'No Circle has that code. Check it with the person who sent it.');
     if (circle.owner_client === req.clientId) throw badRequest('That’s your own Circle code. Send it to your family instead.');
@@ -90,7 +90,7 @@ export default function circlesRouter({ db, hub }) {
       db.prepare('UPDATE circle_members SET name = ?, relation = ? WHERE circle_id = ? AND client_id = ?').run(name, relation, circle.id, req.clientId);
     } else {
       const count = db.prepare('SELECT COUNT(*) AS n FROM circle_members WHERE circle_id = ?').get(circle.id).n;
-      if (count >= MAX_MEMBERS) throw badRequest(`A Circle can have up to ${MAX_MEMBERS} people`);
+      if (count >= MAX_MEMBERS) throw badRequest(`This Circle is full: it can have up to ${MAX_MEMBERS} people.`);
       db.prepare('INSERT INTO circle_members (circle_id, client_id, name, relation, joined_at) VALUES (?, ?, ?, ?, ?)')
         .run(circle.id, req.clientId, name, relation, nowIso());
       hub.send('circle', { kind: 'joined', name, relation }, c => c.clientId === circle.owner_client);

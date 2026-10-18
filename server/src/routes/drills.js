@@ -49,7 +49,7 @@ export default function drillsRouter({ db, hub }) {
     const template = b.template ? drillTemplate(b.template) : templateForType(suggestDrill(db, circle.town).report?.type);
     if (!template) throw badRequest('Unknown drill');
     if (hasPendingDrill(db, circle.owner_client)) {
-      throw new HttpError(409, `${circle.owner_name} hasn’t answered the last practice message yet.`);
+      throw new HttpError(409, 'They haven’t answered the last practice message yet. You can send another once they do.');
     }
     const id = newId('d');
     insert.run(id, template.id, circle.owner_client, circle.id, circle.town, req.clientId, me.name, 'circle', null, nowIso());
@@ -90,7 +90,7 @@ export default function drillsRouter({ db, hub }) {
   r.post('/:id/result', (req, res) => {
     const row = getDrillRow(db, req.params.id);
     if (!row || row.target_client !== req.clientId) throw notFound('Drill not found');
-    if (row.result) throw badRequest('You’ve already answered this one');
+    if (row.result) throw badRequest('You’ve already answered this practice message.');
     const result = oneOf(req.body?.result, RESULTS, 'result');
     db.prepare('UPDATE drills SET result = ?, answered_at = ? WHERE id = ?').run(result, nowIso(), row.id);
     const done = getDrillRow(db, row.id);

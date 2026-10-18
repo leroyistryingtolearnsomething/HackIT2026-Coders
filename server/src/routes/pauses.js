@@ -100,7 +100,7 @@ export default function pausesRouter({ db, hub, pauseWatch }) {
   r.post('/:id/respond', (req, res) => {
     const { row, role } = load(req);
     if (role === 'owner') throw badRequest('Someone else needs to respond to your Pause');
-    if (row.status !== 'open') throw badRequest('This Pause is already closed');
+    if (row.status !== 'open') throw badRequest('This Pause has already been closed.');
     const who = actor(req, row, role);
     const claimed = transaction(db, () => {
       const ok = claimPause(db, row, who.responder);
@@ -121,7 +121,7 @@ export default function pausesRouter({ db, hub, pauseWatch }) {
 
   r.post('/:id/messages', (req, res) => {
     const { row, role } = load(req);
-    if (row.status !== 'open') throw badRequest('This Pause is already closed');
+    if (row.status !== 'open') throw badRequest('This Pause has already been closed.');
     const body = text(req.body?.body, 'message', { min: 1, max: 1000 });
     const who = actor(req, row, role);
     transaction(db, () => {

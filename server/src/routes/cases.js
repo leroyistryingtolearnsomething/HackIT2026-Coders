@@ -40,7 +40,7 @@ export default function casesRouter({ db, hub, images, bot }) {
     let callback = null;
     if (b.callback) {
       const phone = text(b.callback.phone, 'phone', { min: 1, max: 20 });
-      if (!PHONE.test(phone)) throw badRequest('Please enter a valid phone number');
+      if (!PHONE.test(phone)) throw badRequest('Check the phone number. It should look like 8123 4567.');
       callback = {
         name: text(b.callback.name, 'name', { max: 60 }),
         phone,
@@ -48,7 +48,7 @@ export default function casesRouter({ db, hub, images, bot }) {
       };
     }
     // A call-back request on its own is fine: some residents would rather talk than type.
-    if (!body && !image && !callback) throw badRequest('Paste the message or add a screenshot');
+    if (!body && !image && !callback) throw badRequest('Paste the message or add a screenshot first.');
 
     const { flags, level } = analyse(body);
     const id = newId('k');
@@ -67,7 +67,7 @@ export default function casesRouter({ db, hub, images, bot }) {
 
   r.post('/:id/messages', (req, res) => {
     const row = loadRow(req);
-    if (row.status === 'resolved') throw badRequest('This case is already resolved');
+    if (row.status === 'resolved') throw badRequest('This case is already marked as resolved.');
     const body = text(req.body?.body, 'body', { min: 1, max: 3000 });
 
     if (req.volunteer && row.client_id !== req.clientId) { // on their own case a volunteer is the resident

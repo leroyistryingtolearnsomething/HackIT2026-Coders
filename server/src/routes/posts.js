@@ -13,7 +13,7 @@ export function postsRouter({ db, hub, images }) {
 
   const load = (req, id = req.params.id, opts = { withComments: true }) => {
     const post = getPost(db, id, req.clientId, opts);
-    if (!post) throw notFound('Post not found');
+    if (!post) throw notFound('This post isn’t available any more.');
     return post;
   };
 
