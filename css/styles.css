@@ -121,6 +121,10 @@ html {
 }
 /* An accidental pull-to-refresh would drop a Pause in progress and the live alerts. */
 html, body { overscroll-behavior-y: none; }
+/* What shows past the page's edges (a pull at the top, the address bar sliding away): the header's
+   black at the top and the footer's parchment at the bottom, so no white strip appears above the
+   pinned bar. The page itself keeps body's own white. */
+html { background: linear-gradient(var(--color-bg-inverse) 50%, var(--color-surface) 50%); }
 
 /* Controls: fire on tap straight away (no double-tap-zoom wait), and a long press doesn't select their label. */
 a, button, label, summary, select, [role="button"] { touch-action: manipulation; }
@@ -231,7 +235,10 @@ textarea.input { line-height: 1.75rem; }
 
 /* Three zones on every page: header and footer in the surface colour, the body in cream,
    with a single dark line where they meet. */
-.site-header { background: var(--color-bg-inverse); color: var(--color-text-on-inverse); border-bottom: 0; padding-top: env(safe-area-inset-top, 0px); }
+.site-header { position: relative; background: var(--color-bg-inverse); color: var(--color-text-on-inverse); border-bottom: 0; padding-top: env(safe-area-inset-top, 0px); } /* the menu panel hangs from it */
+/* The menu panel fades in (opacity only, so nothing moves for reduced motion). */
+.site-nav.open { transition: opacity 150ms var(--ease-out); }
+@starting-style { .site-nav.open { opacity: 0; } }
 /* Landscape on a notched phone: keep content clear of the notch at the sides. */
 body { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
 /* On the black header: light text, dark controls with a visible edge. */
@@ -531,6 +538,21 @@ body.route-ask .fab { display: none; }
 .ink-verified { color: var(--color-accent-2-700); }
 .ink-pending { color: var(--color-kaya-700); }
 .swatch-pending { border-color: var(--color-kaya-600); border-style: dashed; background: color-mix(in srgb, var(--color-kaya-600) 30%, transparent); }
+.swatch-mine { border: 3px solid var(--color-text); background: transparent; }
+/* "Your town" on the map: the app's own type, not Leaflet's small default label. */
+.leaflet-tooltip.map-mine { font: 600 1rem/1.5rem var(--font-body); color: var(--color-text); padding: 2px var(--space-2); border-radius: var(--radius-sm); }
+/* Radar sections: a one-line purpose under each heading. */
+.radar-intro { margin: var(--space-1) 0 var(--space-4); }
+/* "Going round now": this week's scams by type. A row shows that scam's reports. */
+.going-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); max-width: 46rem; } /* each row reads as one line of thought */
+.going-row { width: 100%; min-height: 44px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-1) var(--space-3);
+  padding: var(--space-3) var(--space-4); text-align: left; font: inherit; color: var(--color-text); background: var(--color-surface); border: 0; border-radius: var(--radius-lg); cursor: pointer;
+  transition: transform 160ms var(--ease-out), background-color 160ms ease; }
+.going-row:active { transform: scale(0.98); } /* a wide row presses less than a button */
+@media (hover: hover) and (pointer: fine) { .going-row:hover { background: var(--color-bg-avatar); } }
+.going-type { font-size: 1.125rem; font-weight: 600; }
+.going-meta { color: var(--ink-78); }
+.going-go { color: var(--action); font-weight: 600; justify-self: end; } /* blue: the part that says "tap" */
 .leaflet-container { font-family: var(--font-body); font-size: 1rem; }
 .leaflet-popup-content-wrapper { border-radius: var(--radius-md); box-shadow: var(--shadow-md); }
 .leaflet-popup-content { margin: var(--space-3) var(--space-4); line-height: 1.5rem; }
@@ -539,7 +561,7 @@ body.route-ask .fab { display: none; }
 .map-pop ul { padding-left: var(--space-4); margin: var(--space-2) 0 var(--space-3); }
 .map-pop .btn-primary { color: var(--color-bg); }
 @media (hover: hover) and (pointer: fine) { .map-pop .btn-primary:hover { color: var(--color-bg); } }
-.leaflet-interactive.pulse { animation: pulse 1.6s ease-in-out infinite; }
+.leaflet-interactive.pulse { animation: pulse 1.6s ease-in-out 4; } /* four pulses draw the eye to a fresh wave, then it rests */
 @keyframes pulse { 0%, 100% { stroke-opacity: 1; stroke-width: 2; } 50% { stroke-opacity: .3; stroke-width: 10; } }
 
 .filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3) var(--space-4); margin-bottom: var(--space-6); }
@@ -647,7 +669,7 @@ body.route-ask .fab { display: none; }
 .cm-poll-row { display: flex; justify-content: space-between; gap: var(--space-2); }
 .cm-poll-pct { font-family: var(--font-heading); }
 .cm-poll-track { height: 8px; border-radius: 999px; overflow: hidden; background: color-mix(in srgb, var(--color-text) 10%, transparent); }
-.cm-poll-bar { display: block; height: 100%; border-radius: 999px; background: var(--action); transition: width 300ms var(--ease-out); }
+.cm-poll-bar { display: block; height: 100%; border-radius: 999px; background: var(--action); }
 .cm-poll-bar.is-scam { background: var(--color-accent-2); }
 .cm-poll-note { font-size: 1rem; color: var(--ink-70); padding-inline: var(--space-2); }
 .cm-actions { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); margin-left: calc(var(--space-2) * -1); }
@@ -693,7 +715,7 @@ body.route-ask .fab { display: none; }
 }
 @media (hover: hover) and (pointer: fine) { .poll-opt:hover { border-color: var(--ink-70); } }
 .poll-opt.chosen { border-color: var(--action); font-weight: 600; }
-.poll-bar { position: absolute; inset: 0 auto 0 0; background: var(--action-subtle); transition: width 300ms var(--ease-out); }
+.poll-bar { position: absolute; inset: 0 auto 0 0; background: var(--action-subtle); }
 .poll-label, .poll-pct { position: relative; }
 .poll-pct { font-family: var(--font-heading); }
 
@@ -727,7 +749,7 @@ body.route-ask .fab { display: none; }
 .lr-levels { flex-wrap: wrap; max-width: 100%; }
 .lr-levels .seg-opt { flex: 1 1 auto; white-space: nowrap; }
 
-.game { position: sticky; top: var(--space-6); display: flex; flex-direction: column; gap: var(--space-4); }
+.game { position: sticky; top: calc(var(--header-h, 0px) + var(--space-6)); display: flex; flex-direction: column; gap: var(--space-4); }
 .game p { margin: 0; }
 .game-msg { margin: var(--space-2) 0; }
 .game-msg blockquote { margin: 0; font-family: var(--font-heading); font-style: italic; font-size: 1.5rem; line-height: 2.25rem; overflow-wrap: anywhere; }
@@ -744,7 +766,7 @@ body.route-ask .fab { display: none; }
 #quizResult p { margin: 0; }
 
 .course-layout { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: var(--gap-xl); align-items: start; }
-.lesson-nav { position: sticky; top: var(--space-6); }
+.lesson-nav { position: sticky; top: calc(var(--header-h, 0px) + var(--space-6)); }
 .lesson-nav .kicker { margin-bottom: var(--space-3); }
 .lesson-nav-title { font-size: 1.5rem; line-height: 2rem; margin: 0 0 var(--space-2); }
 .lesson-steps { list-style: none; margin: var(--space-4) 0 0; padding: 0; }
@@ -1016,8 +1038,8 @@ body.route-ask .fab { display: none; }
 @keyframes launch-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 /* The Pause morph (morph() in app.js): the button, the countdown box and the live panel are one
    shape changing size, so both pictures fill it while it grows; the rest of the page cross-fades. */
-::view-transition-group(pause-morph) { animation-duration: 420ms; animation-timing-function: var(--ease-out); }
-::view-transition-old(pause-morph), ::view-transition-new(pause-morph) { height: 100%; animation-duration: 420ms; }
+::view-transition-group(pause-morph) { animation-duration: 360ms; animation-timing-function: var(--ease-out); }
+::view-transition-old(pause-morph), ::view-transition-new(pause-morph) { height: 100%; animation-duration: 360ms; }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; }
 .launch-actions { display: flex; flex-direction: column; gap: var(--space-2); }
 .launch-actions .btn { width: 100%; min-height: 3.5rem; font-size: 1.1875rem; white-space: normal; }
@@ -1128,6 +1150,7 @@ body.route-ask .fab { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; }
+  .typing .dots i { animation: blink 1.2s infinite !important; } /* an opacity blink, no movement: the live "replying" cue stays */
   /* Fades stay (they explain what appeared); nothing moves or scales. */
   .btn:active:not(:disabled), .cm-vote-btn:active, .cm-poll-opt:active, .poll-opt:active, .sign-btn:active, .cm-topic:active, .pause-btn:active { transform: none; }
   .toast { transform: none; }
@@ -1159,18 +1182,24 @@ body.route-ask .fab { display: none; }
 
 /* ---------- Apple-style layer: materials, type by script, contrast and transparency settings ---------- */
 
-/* Materials: on tablets and computers the black header floats as a translucent layer the
-   page scrolls under. On phones it stays in the page, so the Pause button keeps the first screen. */
-@media (min-width: 721px) {
-  .site-header {
-    position: sticky; top: 0; z-index: 50;
-    background: color-mix(in srgb, var(--color-bg-inverse) 88%, transparent);
-    -webkit-backdrop-filter: blur(20px) saturate(160%);
-    backdrop-filter: blur(20px) saturate(160%);
-  }
-  .alert-banner { top: var(--header-h, 0px); }          /* sits just under the floating header */
-  html { scroll-padding-top: calc(var(--header-h, 0px) + var(--space-4)); } /* jumps don't land under it */
+/* Materials: the black header stays at the top as a translucent layer the page scrolls under,
+   on phones too, so Pause, the menu, language and text size are always one tap away. */
+.site-header {
+  position: sticky; top: 0; z-index: 50;
+  background: color-mix(in srgb, var(--color-bg-inverse) 88%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
 }
+/* The bar's black carries on above the screen's top edge, so when the browser draws the pinned bar
+   a frame late while scrolling, the gap above it shows black, not a white strip of page. */
+.site-header::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 100vh; background: var(--color-bg-inverse); pointer-events: none; }
+/* Phones: solid, no blur. A blurred bar pinned over a scrolling page flickers on phone browsers
+   (white flashes while the blur is redrawn), and at this size the see-through look adds nothing. */
+@media (max-width: 720px) {
+  .site-header { background: var(--color-bg-inverse); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+.alert-banner { top: var(--header-h, 0px); }          /* sits just under the floating header */
+html { scroll-padding-top: calc(var(--header-h, 0px) + var(--space-4)); } /* jumps don't land under it */
 
 /* Chinese and Tamil don't take the tightened tracking used for large Latin headings,
    and Tamil's tall letters need more room between lines. */
@@ -1281,7 +1310,7 @@ html:lang(zh) body, html:lang(ta) body { letter-spacing: 0; }
 @media (max-width: 1199px) {
   .nav-toggle { display: inline-flex; }
   .site-nav { display: none; flex-basis: 100%; flex-direction: column; align-items: flex-start; padding-bottom: var(--space-3); }
-  .site-nav.open { display: flex; }
+  .site-nav.open { display: flex; position: absolute; top: 100%; left: 0; right: 0; z-index: 60; padding: var(--space-2) var(--gutter) var(--space-4); background: var(--color-bg-inverse); box-shadow: var(--shadow-md); max-height: calc(100dvh - var(--header-h, 4rem)); overflow-y: auto; overscroll-behavior: contain; } /* a panel over the page, not pushing it down */
   .site-nav .btn-ghost { padding-inline: .75rem; } /* lines up with the menu links, room for the rounded fill */
   .nav-pause-quick { display: inline-flex; }
   .site-header .site-nav a.nav-pause { display: none; } /* already in the bar */
@@ -1290,7 +1319,7 @@ html:lang(zh) body, html:lang(ta) body { letter-spacing: 0; }
 @media (max-width: 1799px) {
   html:lang(ta) .nav-toggle { display: inline-flex; }
   html:lang(ta) .site-nav { display: none; flex-basis: 100%; flex-direction: column; align-items: flex-start; padding-bottom: var(--space-3); }
-  html:lang(ta) .site-nav.open { display: flex; }
+  html:lang(ta) .site-nav.open { display: flex; position: absolute; top: 100%; left: 0; right: 0; z-index: 60; padding: var(--space-2) var(--gutter) var(--space-4); background: var(--color-bg-inverse); box-shadow: var(--shadow-md); max-height: calc(100dvh - var(--header-h, 4rem)); overflow-y: auto; overscroll-behavior: contain; }
   html:lang(ta) .site-nav .btn-ghost { padding-inline: .75rem; } /* lines up with the menu links, room for the rounded fill */
   html:lang(ta) .nav-pause-quick { display: inline-flex; }
   html:lang(ta) .site-header .site-nav a.nav-pause { display: none; } /* already in the bar */

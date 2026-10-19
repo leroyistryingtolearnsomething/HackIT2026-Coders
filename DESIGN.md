@@ -306,7 +306,7 @@ Confident, round and quick to answer.
 A slim header-black bar. The logo tile, then the Pause pill (chili, always visible), then the pages in On-dark Text; the current page sits on a translucent white pill at weight 600. The language picker, A+ and Volunteer sign in sit at the right in muted on-dark text. On narrower screens the pages fold behind "Menu"; Escape closes it.
 
 ### The Pause Button (signature)
-A 240px chili circle with "Pause" at 60px and a one-line subtitle ("Alert my Circle" or "Alert a volunteer"). Pressing it starts a 5-second countdown with "Send now" and "Cancel, I tapped by mistake" (Cancel takes the focus). Where the browser supports View Transitions and the person has not asked for reduced motion, the button grows into the countdown box and the box flows into the live screen, in 420ms; otherwise the screens simply switch. The alert is sent whatever the animation does.
+A 240px chili circle with "Pause" at 60px and a one-line subtitle ("Alert my Circle" or "Alert a volunteer"). Pressing it starts a 5-second countdown with "Send now" and "Cancel, I tapped by mistake" (Cancel takes the focus). Where the browser supports View Transitions and the person has not asked for reduced motion, the button grows into the countdown box and the box flows into the live screen, in 360ms; otherwise the screens simply switch. The alert is sent whatever the animation does.
 
 ### Red-flag Highlights (signature)
 In Check a message, risky phrases in the pasted text get a chili wash and a 2px chili underline, drawn on a copy of the text behind the box so typing, pasting and screen readers behave normally. Each flag in the list beside it quotes the phrase it found.

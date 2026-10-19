@@ -687,6 +687,15 @@
     const open = nav.classList.toggle('open');
     $('#navToggle').setAttribute('aria-expanded', String(open));
   });
+  // A tap outside the open menu closes it. On the page, that tap does nothing else, so closing the
+  // menu can't also press Pause or follow a link by accident; taps on the header bar still go through.
+  document.addEventListener('click', e => {
+    const nav = $('#siteNav');
+    if (!nav.classList.contains('open') || nav.contains(e.target) || $('#navToggle').contains(e.target)) return;
+    nav.classList.remove('open');
+    $('#navToggle').setAttribute('aria-expanded', 'false');
+    if (!e.target.closest('.site-header')) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
   // Escape closes the open menu and puts focus back on its button.
   document.addEventListener('keydown', e => {
     const nav = $('#siteNav');
@@ -2557,10 +2566,10 @@
   /* =========================================================
      SCAM RADAR
      ========================================================= */
-  const radarFilter = { town: '', type: '', days: 30, verifiedOnly: false };
+  const radarFilter = { town: '', type: '', channel: '', days: 30, verifiedOnly: false };
   // Phones fold the filters away, except when one is on, so a filtered list never looks like the full one.
   const filtersOpen = () => !radarPhone()
-    || !!(radarFilter.town || radarFilter.type || radarFilter.days !== 30 || radarFilter.verifiedOnly);
+    || !!(radarFilter.town || radarFilter.type || radarFilter.channel || radarFilter.days !== 30 || radarFilter.verifiedOnly);
   /* The feed shows reports a page at a time; a long description shows 3 lines until opened. */
   const RADAR_PAGE = 30;
   const radarPhone = () => matchMedia('(max-width: 720px)').matches;
@@ -2581,6 +2590,7 @@
     return cache.reports
       .filter(r => !radarFilter.town || r.town === radarFilter.town)
       .filter(r => !radarFilter.type || r.type === radarFilter.type)
+      .filter(r => !radarFilter.channel || r.channel === radarFilter.channel)
       .filter(r => !radarFilter.days || hoursSince(r.created) <= radarFilter.days * 24)
       .filter(r => !radarFilter.verifiedOnly || r.status === 'verified')
       .sort(byNewest);
@@ -2641,6 +2651,50 @@
           <section class="stat-row" id="radarStats" aria-label="${tx('Summary of the reports shown')}"></section>
         </header>
 
+        <section class="section" aria-labelledby="goingTitle">
+          <h2 class="section-title" id="goingTitle">${tx('Going round now')}</h2>
+          <p class="muted radar-intro">${tx('In the last 7 days, most neighbours hit first. Tap one to see its reports.')}</p>
+          <ul class="going-list" id="goingList" role="list"></ul>
+        </section>
+
+        <section class="section" aria-labelledby="mapTitle">
+          <h2 class="section-title" id="mapTitle">${tx('Where neighbours are being hit')}</h2>
+          <p class="muted radar-intro">${tx('Check in on family and friends in the hardest-hit towns.')}</p>
+          <figure class="map-figure">
+            <div id="map" role="region" aria-label="${tx('Map of scam reports in Singapore')}"></div>
+            <figcaption class="legend">
+              <span><i class="swatch swatch-verified" aria-hidden="true"></i>${tx('Verified scam wave')}</span>
+              <span><i class="swatch swatch-pending" aria-hidden="true"></i>${tx('Awaiting check')}</span>
+              ${sub.town ? `<span><i class="swatch swatch-mine" aria-hidden="true"></i>${tx('Your town')}</span>` : ''}
+              <span>${tx('A bigger circle means more neighbours hit')}</span>
+            </figcaption>
+          </figure>
+        </section>
+
+        <section class="section" aria-labelledby="feedTitle">
+          <div class="section-head">
+            <h2 class="section-title" id="feedTitle">${tx('Reports')}</h2>
+            <button type="button" class="btn btn-primary btn-lg" id="reportBtn">${tx('Report a scam')}</button>
+          </div>
+          <details class="cf-more filter-box" id="fBox" ${filtersOpen() ? 'open' : ''}>
+          <summary>${tx('Filter reports')}</summary>
+          <div class="filters" role="search" aria-label="${tx('Filter reports')}">
+            <div class="field"><label for="fType">${tx('Scam type')}</label><select id="fType" class="input"><option value="">${tx('All types')}</option>${KW.SCAM_TYPES.map(ty => `<option value="${esc(ty)}" ${ty === radarFilter.type ? 'selected' : ''}>${tx(ty)}</option>`).join('')}</select></div>
+            <div class="field"><label for="fChannel">${tx('How it reached people')}</label><select id="fChannel" class="input"><option value="">${tx('All channels')}</option>${KW.CHANNELS.map(c => `<option value="${esc(c)}" ${c === radarFilter.channel ? 'selected' : ''}>${tx(c)}</option>`).join('')}</select></div>
+            <div class="field"><label for="fDays">${tx('Period')}</label><select id="fDays" class="input">
+              <option value="1" ${radarFilter.days === 1 ? 'selected' : ''}>${tx('Last 24 hours')}</option>
+              <option value="7" ${radarFilter.days === 7 ? 'selected' : ''}>${tx('Last 7 days')}</option>
+              <option value="30" ${radarFilter.days === 30 ? 'selected' : ''}>${tx('Last 30 days')}</option>
+              <option value="0" ${radarFilter.days === 0 ? 'selected' : ''}>${tx('All time')}</option>
+            </select></div>
+            <div class="field"><label for="fTown">${tx('Town')}</label><select id="fTown" class="input">${townOptions(radarFilter.town, true, t('All towns'))}</select></div>
+            <label class="check"><input type="checkbox" id="fVerified" ${radarFilter.verifiedOnly ? 'checked' : ''}> ${tx('Verified only')}</label>
+          </div>
+          </details>
+          ${writtenNote()}
+          <div id="radarFeed" aria-live="polite"></div>
+        </section>
+
         <section class="head-side radar-alerts" aria-labelledby="alertTitle">
             <h2 class="kicker" id="alertTitle">${tx('Alerts for your town')}</h2>
             <p>${sub.enabled
@@ -2652,38 +2706,6 @@
                 ? `<button type="button" class="btn btn-secondary" id="subOff">${tx('Turn off')}</button><button type="button" class="btn btn-ghost" id="subTest">${tx('Send a test alert')}</button>`
                 : `<button type="button" class="btn btn-secondary" id="subOn">${tx('Alert me')}</button>`}
             </div>
-        </section>
-
-        <figure class="map-figure">
-          <div id="map" role="region" aria-label="${tx('Map of scam reports in Singapore')}"></div>
-          <figcaption class="legend">
-            <span><i class="swatch swatch-verified" aria-hidden="true"></i>${tx('Verified scam wave')}</span>
-            <span><i class="swatch swatch-pending" aria-hidden="true"></i>${tx('Awaiting check')}</span>
-            <span>${tx('A bigger circle means more neighbours hit')}</span>
-          </figcaption>
-        </figure>
-
-        <section class="section" aria-labelledby="feedTitle">
-          <div class="section-head">
-            <h2 class="section-title" id="feedTitle">${tx('Reports')}</h2>
-            <button type="button" class="btn btn-primary btn-lg" id="reportBtn">${tx('Report a scam')}</button>
-          </div>
-          <details class="cf-more filter-box" id="fBox" ${filtersOpen() ? 'open' : ''}>
-          <summary>${tx('Filter reports')}</summary>
-          <div class="filters" role="search" aria-label="${tx('Filter reports')}">
-            <div class="field"><label for="fTown">${tx('Town')}</label><select id="fTown" class="input">${townOptions(radarFilter.town, true, t('All towns'))}</select></div>
-            <div class="field"><label for="fType">${tx('Scam type')}</label><select id="fType" class="input"><option value="">${tx('All types')}</option>${KW.SCAM_TYPES.map(ty => `<option value="${esc(ty)}" ${ty === radarFilter.type ? 'selected' : ''}>${tx(ty)}</option>`).join('')}</select></div>
-            <div class="field"><label for="fDays">${tx('Period')}</label><select id="fDays" class="input">
-              <option value="1" ${radarFilter.days === 1 ? 'selected' : ''}>${tx('Last 24 hours')}</option>
-              <option value="7" ${radarFilter.days === 7 ? 'selected' : ''}>${tx('Last 7 days')}</option>
-              <option value="30" ${radarFilter.days === 30 ? 'selected' : ''}>${tx('Last 30 days')}</option>
-              <option value="0" ${radarFilter.days === 0 ? 'selected' : ''}>${tx('All time')}</option>
-            </select></div>
-            <label class="check"><input type="checkbox" id="fVerified" ${radarFilter.verifiedOnly ? 'checked' : ''}> ${tx('Verified only')}</label>
-          </div>
-          </details>
-          ${writtenNote()}
-          <div id="radarFeed" aria-live="polite"></div>
         </section>
       </div>`;
 
@@ -2723,8 +2745,20 @@
     });
     bind('#fTown', 'town', el => el.value);
     bind('#fType', 'type', el => el.value);
+    bind('#fChannel', 'channel', el => el.value);
     bind('#fDays', 'days', el => Number(el.value));
     bind('#fVerified', 'verifiedOnly', el => el.checked);
+    // A row in "Going round now" shows that scam's reports.
+    $('#goingList').addEventListener('click', e => {
+      const row = e.target.closest('[data-going]');
+      if (!row) return;
+      radarFilter.type = row.dataset.going;
+      $('#fType').value = radarFilter.type;
+      $('#fBox').open = true; // show what the list is filtered to
+      radarShown = radarStep();
+      updateRadar();
+      $('#feedTitle').scrollIntoView({ behavior: 'smooth' });
+    });
 
     initMap();
     updateRadar();
@@ -2735,7 +2769,31 @@
     const reports = filteredReports();
     drawMarkers(reports);
     renderRadarStats(reports);
+    renderGoing();
     renderRadarFeed(reports);
+  }
+
+  /* "Going round now": this week's scams by type, most neighbours hit first, whatever the filters.
+     Scams arrive by phone more than by place, so this leads; the map below shows where. */
+  function renderGoing() {
+    const groups = {};
+    cache.reports.filter(r => r.status !== 'rumour' && hoursSince(r.created) < 168).forEach(r => {
+      const g = groups[r.type] || (groups[r.type] = { type: r.type, hit: 0, verified: false, channels: {} });
+      g.hit += r.count;
+      g.verified = g.verified || r.status === 'verified';
+      g.channels[r.channel] = (g.channels[r.channel] || 0) + r.count;
+    });
+    const rows = Object.values(groups).sort((a, b) => b.hit - a.hit).slice(0, 5);
+    $('#goingList').innerHTML = rows.length ? rows.map(g => {
+      const channels = Object.entries(g.channels).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([c]) => tx(c)).join(t(', '));
+      return `
+        <li><button type="button" class="going-row" data-going="${esc(g.type)}">
+          <span class="going-type">${tx(g.type)}</span>
+          <span class="tag ${g.verified ? 'tag-accent-2' : 'tag-pending'}">${tx(g.verified ? 'Verified' : 'Awaiting check')}</span>
+          <span class="going-meta">${channels} · ${tx('{n} neighbours hit', { n: g.hit })}</span>
+          <span class="going-go">${tx('See reports')}</span>
+        </button></li>`;
+    }).join('') : `<li class="muted">${tx('Nothing has been reported in the last 7 days.')}</li>`;
   }
 
   function renderRadarStats(reports) {
@@ -2763,7 +2821,7 @@
     if (!reports.length) {
       feed.innerHTML = `<div class="empty"><p>${tx('No reports match these filters.')}</p><button type="button" class="btn btn-secondary" id="clearFilters">${tx('Clear filters')}</button></div>`;
       $('#clearFilters').addEventListener('click', () => {
-        Object.assign(radarFilter, { town: '', type: '', days: 30, verifiedOnly: false });
+        Object.assign(radarFilter, { town: '', type: '', channel: '', days: 30, verifiedOnly: false });
         radarShown = radarStep();
         drawRadarPage();
       });
@@ -2911,6 +2969,15 @@
           <button type="button" class="btn btn-primary" data-town="${esc(town)}">${tx('Show {town} reports', { town })}</button>
         </div>`).addTo(markerLayer);
     });
+    // Your own town: an ink ring just outside its circle, labelled, so you can find it at a glance.
+    const mine = prefs.subscription.town;
+    if (mine && KW.TOWNS[mine]) {
+      const g = groups[mine];
+      L.circleMarker(KW.TOWNS[mine], {
+        radius: (g ? 9 + Math.sqrt(g.residents) * 2.4 : 8) + 6,
+        color: cssVar('--color-text'), weight: 3, fill: false, interactive: false
+      }).bindTooltip(t('Your town'), { permanent: true, direction: 'top', className: 'map-mine' }).addTo(markerLayer);
+    }
   }
 
   function openReportModal(prefill = {}) {
