@@ -1173,10 +1173,12 @@ body.route-ask .fab { display: none; }
 :lang(ta) .launch-title { font-size: 1.5rem; line-height: 2.25rem; }
 :lang(ta) .display-sm, :lang(ta) .cf-headline, :lang(ta) .pause-headline { font-size: 2rem; line-height: 2.75rem; letter-spacing: 0; }
 @media (max-width: 720px) {
-  :lang(ta) .display, :lang(ta) .pause-page .page-head .display { font-size: 1.75rem; line-height: 2.5rem; }
+  /* The longest Tamil word in a heading ("வற்புறுத்துகிறார்களா?") is about 13 em wide; shrinking with
+     the screen keeps it on one line instead of breaking off its "?". */
+  :lang(ta) .display, :lang(ta) .pause-page .page-head .display { font-size: min(1.75rem, calc((100vw - 2 * var(--gutter)) / 13)); line-height: 1.43; }
   :lang(ta) .display-sm, :lang(ta) .cf-headline, :lang(ta) .pause-headline { font-size: 1.5rem; line-height: 2.25rem; }
   :lang(ta) .pause-btn-word { font-size: 1.875rem; }
-  html.large-text:lang(ta) .pause-page .page-head .display { font-size: 1.5rem; line-height: 2.25rem; }
+  html.large-text:lang(ta) .pause-page .page-head .display { font-size: min(1.5rem, calc((100vw - 2 * var(--gutter)) / 13)); line-height: 1.5; }
   html.large-text:lang(ta) .pause-headline { font-size: 1.3125rem; line-height: 2rem; }
 }
 
