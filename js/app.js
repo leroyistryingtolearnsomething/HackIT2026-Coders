@@ -236,6 +236,23 @@
     run();
   }
 
+  /* Copy text. The Clipboard API is missing on plain-http addresses (a phone opening the laptop's
+     http://10.x address) and can be blocked, so fall back to the older select-and-copy way. */
+  function copyText(text) {
+    const legacy = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok ? Promise.resolve() : Promise.reject(new Error('copy blocked'));
+    };
+    return navigator.clipboard ? navigator.clipboard.writeText(text).catch(legacy) : legacy();
+  }
+
   let lastFocus = null;
   let onModalClose = null;
   function openModal({ title, body, onMount, onClose, wide = false, animate = true }) {
@@ -2322,7 +2339,7 @@
       });
     } else if (b.id === 'copySos') {
       const url = $('.sos-url').textContent;
-      (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject())
+      copyText(url)
         .then(() => toast(t('Link copied. Paste it into your shortcut.'), 'ok'))
         .catch(() => toast(t('Press and hold the link to copy it.')));
     } else if (b.id === 'pauseBtn') {
@@ -2379,7 +2396,7 @@
       });
     } else if (b.id === 'copyCode') {
       const code = pauseState.circle.mine.inviteCode;
-      (navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject())
+      copyText(code)
         .then(() => toast(t('Code copied. Paste it into a message to your family.'), 'ok'))
         .catch(() => toast(t('Your code is {code}.', { code })));
     } else if (b.id === 'newCode') {
@@ -3187,14 +3204,14 @@
   function sharePost(p) {
     const url = `${location.origin}/#/community/post/${p.id}`;
     const title = noEmoji(p.title);
+    const copy = () => copyText(url)
+      .then(() => toast(t('Link copied. Paste it into your block’s chat group.'), 'ok'))
+      .catch(() => toast(url)); // copying blocked everywhere: show the link to copy by hand
     if (navigator.share) {
-      navigator.share({ title, text: `Kampung Watch: ${title}`, url }).catch(() => { /* closed the share sheet */ });
-    } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(url)
-        .then(() => toast(t('Link copied. Paste it into your block’s chat group.'), 'ok'))
-        .catch(() => toast(url)); // copying can be blocked; show the link to copy by hand
+      // Closing the share sheet is an AbortError; any other failure falls back to copying.
+      navigator.share({ title, text: `Kampung Watch: ${title}`, url }).catch(e => { if (e.name !== 'AbortError') copy(); });
     } else {
-      toast(url);
+      copy();
     }
   }
 
